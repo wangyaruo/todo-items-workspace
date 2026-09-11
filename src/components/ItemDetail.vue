@@ -4,14 +4,22 @@ import StatusBadge from './StatusBadge.vue'
 import AttachmentField from './AttachmentField.vue'
 import CommentThread from './CommentThread.vue'
 import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
-import { activeItem, deleteItem, patchItem } from '@/store/board'
+import {
+  activeItem,
+  attachmentBusy,
+  attachmentError,
+  clearAttachmentError,
+  deleteItem,
+  patchItem,
+  removeAttachment,
+  uploadAttachments,
+} from '@/store/board'
 import { formatDateTime } from '@/utils/format'
-import type { Attachment, StatusKey } from '@/types'
+import type { StatusKey } from '@/types'
 
 const editing = ref(false)
 const draftTitle = ref('')
 const draftDesc = ref('')
-const draftAtts = ref<Attachment[]>([])
 const confirmDelete = ref(false)
 const busy = ref(false)
 const localError = ref('')
@@ -22,10 +30,10 @@ watch(
     editing.value = false
     confirmDelete.value = false
     localError.value = ''
+    clearAttachmentError()
     if (it) {
       draftTitle.value = it.title
       draftDesc.value = it.description
-      draftAtts.value = [...it.attachments]
     }
   },
   { immediate: true },
@@ -39,7 +47,6 @@ function startEdit(): void {
   if (!it) return
   draftTitle.value = it.title
   draftDesc.value = it.description
-  draftAtts.value = [...it.attachments]
   editing.value = true
   localError.value = ''
 }
@@ -61,7 +68,6 @@ async function save(): Promise<void> {
   await patchItem(it.id, {
     title,
     description: draftDesc.value.trim(),
-    attachments: draftAtts.value,
   })
   busy.value = false
   editing.value = false
@@ -73,6 +79,18 @@ async function setStatus(key: StatusKey): Promise<void> {
   busy.value = true
   await patchItem(it.id, { status: key })
   busy.value = false
+}
+
+function onAddFiles(picked: File[]): void {
+  const it = activeItem.value
+  if (!it) return
+  void uploadAttachments(it.id, picked)
+}
+
+function onRemoveAttachment(attachmentId: string): void {
+  const it = activeItem.value
+  if (!it) return
+  void removeAttachment(it.id, attachmentId)
 }
 
 async function doDelete(): Promise<void> {
@@ -169,9 +187,11 @@ async function doDelete(): Promise<void> {
           <span v-if="activeItem.attachments.length" class="block-n">{{ activeItem.attachments.length }}</span>
         </h3>
         <AttachmentField
-          :model-value="editing ? draftAtts : activeItem.attachments"
-          :editable="editing"
-          @update:model-value="draftAtts = $event"
+          :items="activeItem.attachments"
+          :busy="attachmentBusy"
+          :server-error="attachmentError"
+          @add="onAddFiles"
+          @remove="onRemoveAttachment"
         />
         <p v-if="localError" class="err">{{ localError }}</p>
       </section>

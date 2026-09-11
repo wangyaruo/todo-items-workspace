@@ -9,13 +9,13 @@ export type StatusKey =
   | 'passed' // 验证通过
   | 'rework' // 重新处理
 
-/** 附件。dataUrl 为本地版内联存储；接入自己的服务器后换成远端 URL 即可 */
+/** 附件。本地模式为内联 base64；接入后端后为 /uploads/xxx 访问路径 */
 export interface Attachment {
   id: string
   name: string
   size: number
   mime: string
-  dataUrl: string
+  url: string
   uploadedAt: string
 }
 
@@ -41,13 +41,12 @@ export interface Item {
   updatedAt: string
 }
 
-/** 新建时提交的字段 */
+/** 新建时提交的字段（附件在条目创建后单独上传） */
 export interface ItemDraft {
   type: ItemType
   title: string
   description: string
   status: StatusKey
-  attachments: Attachment[]
 }
 
 /** 当前操作人身份（仅用于署名与默认视角，不做权限隔离） */

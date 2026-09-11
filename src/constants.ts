@@ -80,8 +80,8 @@ export const ROLE_LABEL: Record<Role, string> = {
   student: '学生',
 }
 
-/** 单文件大小上限（本地存储版，内联保存于浏览器） */
-export const MAX_ATTACHMENT_BYTES = 800 * 1024
+/** 单文件大小上限（与后端 MAX_UPLOAD_BYTES 保持一致） */
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 /** 单个条目的附件数量上限 */
-export const MAX_ATTACHMENTS_PER_ITEM = 5
+export const MAX_ATTACHMENTS_PER_ITEM = 10

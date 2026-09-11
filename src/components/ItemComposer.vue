@@ -8,24 +8,56 @@ import type { Attachment, ItemType, StatusKey } from '@/types'
 const type = ref<ItemType>('requirement')
 const title = ref('')
 const description = ref('')
-const attachments = ref<Attachment[]>([])
 const status = ref<StatusKey>('pending')
 const busy = ref(false)
 const err = ref('')
+
+/** 待上传的文件，与预览列表按下标一一对应 */
+const files = ref<File[]>([])
+const previews = ref<Attachment[]>([])
+
+function releaseAll(): void {
+  for (const p of previews.value) URL.revokeObjectURL(p.url)
+  previews.value = []
+  files.value = []
+}
 
 watch(composerOpen, (open) => {
   if (!open) return
   type.value = activeType.value
   title.value = ''
   description.value = ''
-  attachments.value = []
   status.value = 'pending'
   err.value = ''
   busy.value = false
+  releaseAll()
 })
+
+function onAddFiles(picked: File[]): void {
+  for (const file of picked) {
+    files.value.push(file)
+    previews.value.push({
+      id: `pending_${files.value.length}_${file.name}`,
+      name: file.name,
+      size: file.size,
+      mime: file.type || 'application/octet-stream',
+      url: URL.createObjectURL(file),
+      uploadedAt: new Date().toISOString(),
+    })
+  }
+}
+
+function onRemoveFile(id: string): void {
+  const idx = previews.value.findIndex((p) => p.id === id)
+  if (idx < 0) return
+  URL.revokeObjectURL(previews.value[idx].url)
+  previews.value.splice(idx, 1)
+  files.value.splice(idx, 1)
+}
 
 function close(): void {
   if (busy.value) return
+  releaseAll()
   composerOpen.value = false
 }
 
@@ -36,18 +68,23 @@ async function submit(): Promise<void> {
   }
   busy.value = true
   err.value = ''
-  const created = await createItem({
-    type: type.value,
-    title: title.value.trim(),
-    description: description.value.trim(),
-    status: status.value,
-    attachments: attachments.value,
-  })
+
+  const created = await createItem(
+    {
+      type: type.value,
+      title: title.value.trim(),
+      description: description.value.trim(),
+      status: status.value,
+    },
+    files.value,
+  )
+
   busy.value = false
   if (created) {
+    releaseAll()
     composerOpen.value = false
   } else {
-    err.value = '保存失败，请检查浏览器存储空间后重试。'
+    err.value = '保存失败，请稍后重试。'
   }
 }
 </script>
@@ -104,7 +141,7 @@ async function submit(): Promise<void> {
 
         <div class="grp">
           <span class="label">附件</span>
-          <AttachmentField v-model="attachments" />
+          <AttachmentField :items="previews" @add="onAddFiles" @remove="onRemoveFile" />
         </div>
 
         <div class="grp">

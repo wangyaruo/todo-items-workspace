@@ -1,38 +1,44 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { MAX_ATTACHMENTS_PER_ITEM, MAX_ATTACHMENT_BYTES } from '@/constants'
-import { extOf, formatSize, uid } from '@/utils/format'
+import { extOf, formatSize } from '@/utils/format'
 import type { Attachment } from '@/types'
 
 const props = withDefaults(
-  defineProps<{ modelValue: Attachment[]; editable?: boolean; dense?: boolean }>(),
-  { editable: true, dense: false },
+  defineProps<{ items: Attachment[]; editable?: boolean; busy?: boolean; serverError?: string }>(),
+  { editable: true, busy: false, serverError: '' },
 )
-const emit = defineEmits<{ 'update:modelValue': [Attachment[]] }>()
+
+const emit = defineEmits<{
+  add: [files: File[]]
+  remove: [id: string]
+}>()
 
 const localError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const canAdd = computed(() => props.editable && props.modelValue.length < MAX_ATTACHMENTS_PER_ITEM)
+const canAdd = computed(
+  () => props.editable && !props.busy && props.items.length < MAX_ATTACHMENTS_PER_ITEM,
+)
 
-function readAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('文件读取失败'))
-    reader.readAsDataURL(file)
-  })
+const errorText = computed(() => localError.value || props.serverError)
+
+function pick(): void {
+  fileInput.value?.click()
 }
 
-async function onPick(event: Event): Promise<void> {
+function onPick(event: Event): void {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
+  input.value = ''
   localError.value = ''
   if (files.length === 0) return
 
-  const next = [...props.modelValue]
+  const room = MAX_ATTACHMENTS_PER_ITEM - props.items.length
+  const accepted: File[] = []
+
   for (const file of files) {
-    if (next.length >= MAX_ATTACHMENTS_PER_ITEM) {
+    if (accepted.length >= room) {
       localError.value = `每条最多 ${MAX_ATTACHMENTS_PER_ITEM} 个附件。`
       break
     }
@@ -40,29 +46,10 @@ async function onPick(event: Event): Promise<void> {
       localError.value = `「${file.name}」${formatSize(file.size)}，超过单文件 ${formatSize(MAX_ATTACHMENT_BYTES)} 上限。`
       continue
     }
-    try {
-      next.push({
-        id: uid('att'),
-        name: file.name,
-        size: file.size,
-        mime: file.type || 'application/octet-stream',
-        dataUrl: await readAsDataURL(file),
-        uploadedAt: new Date().toISOString(),
-      })
-    } catch {
-      localError.value = `「${file.name}」读取失败，请重试。`
-    }
+    accepted.push(file)
   }
 
-  emit('update:modelValue', next)
-  input.value = ''
-}
-
-function remove(id: string): void {
-  emit(
-    'update:modelValue',
-    props.modelValue.filter((a) => a.id !== id),
-  )
+  if (accepted.length > 0) emit('add', accepted)
 }
 
 function isImage(mime: string): boolean {
@@ -72,10 +59,10 @@ function isImage(mime: string): boolean {
 
 <template>
   <div class="att">
-    <div v-if="modelValue.length" class="att-list">
-      <div v-for="a in modelValue" :key="a.id" class="att-item" :class="{ 'att-item--dense': dense }">
+    <div v-if="items.length" class="att-list">
+      <div v-for="a in items" :key="a.id" class="att-item">
         <span class="att-thumb">
-          <img v-if="isImage(a.mime)" :src="a.dataUrl" :alt="a.name" />
+          <img v-if="isImage(a.mime)" :src="a.url" :alt="a.name" />
           <span v-else class="att-ext">{{ extOf(a.name) }}</span>
         </span>
 
@@ -84,7 +71,7 @@ function isImage(mime: string): boolean {
           <span class="att-size">{{ formatSize(a.size) }}</span>
         </span>
 
-        <a class="att-act" :href="a.dataUrl" :download="a.name" title="下载">
+        <a class="att-act" :href="a.url" :download="a.name" target="_blank" rel="noopener" title="下载">
           <svg viewBox="0 0 16 16" width="14" height="14">
             <path
               d="M8 2.6v7.2M5.2 7.2 8 10l2.8-2.8M3.4 12.6h9.2"
@@ -97,7 +84,13 @@ function isImage(mime: string): boolean {
           </svg>
         </a>
 
-        <button v-if="editable" class="att-act att-act--del" title="移除" @click="remove(a.id)">
+        <button
+          v-if="editable"
+          class="att-act att-act--del"
+          title="移除"
+          :disabled="busy"
+          @click="emit('remove', a.id)"
+        >
           <svg viewBox="0 0 16 16" width="14" height="14">
             <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" />
           </svg>
@@ -107,24 +100,18 @@ function isImage(mime: string): boolean {
 
     <p v-else-if="!editable" class="att-none">无附件</p>
 
-    <button v-if="canAdd" class="att-add" @click="fileInput?.click()">
+    <button v-if="canAdd" class="att-add" :disabled="busy" @click="pick">
       <svg viewBox="0 0 16 16" width="14" height="14">
         <path d="M8 3.4v9.2M3.4 8h9.2" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" />
       </svg>
-      上传附件
+      {{ busy ? '上传中…' : '上传附件' }}
     </button>
 
-    <input
-      ref="fileInput"
-      type="file"
-      multiple
-      class="att-input"
-      @change="onPick"
-    />
+    <input ref="fileInput" type="file" multiple class="att-input" @change="onPick" />
 
-    <p v-if="localError" class="att-err">{{ localError }}</p>
+    <p v-if="errorText" class="att-err">{{ errorText }}</p>
     <p v-else-if="editable" class="att-hint">
-      支持任意格式，单文件 ≤ {{ formatSize(MAX_ATTACHMENT_BYTES) }}，最多 {{ MAX_ATTACHMENTS_PER_ITEM }} 个
+      单文件 ≤ {{ formatSize(MAX_ATTACHMENT_BYTES) }}，最多 {{ MAX_ATTACHMENTS_PER_ITEM }} 个
     </p>
   </div>
 </template>
@@ -232,10 +219,15 @@ function isImage(mime: string): boolean {
   transition: all 0.14s;
 }
 
-.att-add:hover {
+.att-add:hover:not(:disabled) {
   border-color: var(--brand);
   color: var(--brand);
   background: var(--brand-weak);
+}
+
+.att-add:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .att-input {

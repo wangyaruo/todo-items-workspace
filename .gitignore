@@ -26,3 +26,8 @@ pnpm-debug.log*
 
 # 本地工作区数据（记忆文件与临时校验脚本），不纳入版本控制
 .workbuddy/
+
+# 后端
+server/node_modules/
+server/.env
+server/uploads/

@@ -112,7 +112,7 @@ function replaceItem(next: Item): void {
   if (idx > -1) items.value[idx] = next
 }
 
-export async function createItem(draft: ItemDraft): Promise<Item | null> {
+export async function createItem(draft: ItemDraft, files: File[] = []): Promise<Item | null> {
   errorMessage.value = ''
   try {
     const created = await api.create(draft)
@@ -120,7 +120,8 @@ export async function createItem(draft: ItemDraft): Promise<Item | null> {
     activeType.value = created.type
     statusFilter.value = 'all'
     activeId.value = created.id
-    return created
+    if (files.length > 0) await uploadAttachments(created.id, files)
+    return items.value.find((it) => it.id === created.id) ?? created
   } catch (err) {
     errorMessage.value = (err as Error).message || '创建失败'
     return null
@@ -152,14 +153,50 @@ export async function deleteItem(id: string): Promise<void> {
 export async function addComment(id: string, body: string): Promise<boolean> {
   errorMessage.value = ''
   try {
-    await api.addComment(id, { author: effectiveName.value, role: currentRole.value, body })
-    const fresh = (await api.list()).find((it) => it.id === id)
-    if (fresh) replaceItem(fresh)
+    replaceItem(
+      await api.addComment(id, { author: effectiveName.value, role: currentRole.value, body }),
+    )
     return true
   } catch (err) {
     errorMessage.value = (err as Error).message || '评论失败'
     return false
   }
+}
+
+/** 附件上传 / 删除进行中 */
+export const attachmentBusy = ref(false)
+/** 附件相关错误，就近显示在附件区 */
+export const attachmentError = ref('')
+
+export async function uploadAttachments(id: string, files: File[]): Promise<void> {
+  if (files.length === 0) return
+  attachmentBusy.value = true
+  attachmentError.value = ''
+  try {
+    for (const file of files) {
+      replaceItem(await api.uploadAttachment(id, file))
+    }
+  } catch (err) {
+    attachmentError.value = (err as Error).message || '附件上传失败'
+  } finally {
+    attachmentBusy.value = false
+  }
+}
+
+export async function removeAttachment(id: string, attachmentId: string): Promise<void> {
+  attachmentBusy.value = true
+  attachmentError.value = ''
+  try {
+    replaceItem(await api.removeAttachment(id, attachmentId))
+  } catch (err) {
+    attachmentError.value = (err as Error).message || '附件删除失败'
+  } finally {
+    attachmentBusy.value = false
+  }
+}
+
+export function clearAttachmentError(): void {
+  attachmentError.value = ''
 }
 
 export function selectType(type: ItemType): void {
