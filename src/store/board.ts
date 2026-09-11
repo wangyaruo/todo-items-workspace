@@ -1,0 +1,176 @@
+import { computed, ref } from 'vue'
+import { api, type ItemPatch } from '@/api'
+import type { Item, ItemDraft, ItemType, Role, StatusKey } from '@/types'
+
+/** 全局状态（模块级单例，组件直接引入使用） */
+export const items = ref<Item[]>([])
+export const loading = ref(false)
+export const errorMessage = ref('')
+export const activeType = ref<ItemType>('requirement')
+export const activeId = ref('')
+export const statusFilter = ref<StatusKey | 'all'>('all')
+export const currentRole = ref<Role>(readRole())
+export const displayName = ref(readName())
+/** 新建面板是否展开 */
+export const composerOpen = ref(false)
+
+export const teacherName = ref('老师')
+export const studentName = ref('学生')
+
+function readRole(): Role {
+  const v = localStorage.getItem('todo-board:role')
+  return v === 'student' ? 'student' : 'teacher'
+}
+
+function readName(): string {
+  return localStorage.getItem(`todo-board:name:${readRole()}`) ?? ''
+}
+
+/** 当前显示名的兜底：未自定义时按角色给默认称呼 */
+export const effectiveName = computed(
+  () => displayName.value.trim() || (currentRole.value === 'teacher' ? teacherName.value : studentName.value),
+)
+
+export function setRole(role: Role): void {
+  currentRole.value = role
+  localStorage.setItem('todo-board:role', role)
+  displayName.value = localStorage.getItem(`todo-board:name:${role}`) ?? ''
+}
+
+export function setName(name: string): void {
+  displayName.value = name
+  localStorage.setItem(`todo-board:name:${currentRole.value}`, name)
+}
+
+export function setTeacherName(name: string): void {
+  teacherName.value = name.trim() || '老师'
+  localStorage.setItem('todo-board:teacherName', teacherName.value)
+}
+
+export function setStudentName(name: string): void {
+  studentName.value = name.trim() || '学生'
+  localStorage.setItem('todo-board:studentName', studentName.value)
+}
+
+export function loadNames(): void {
+  teacherName.value = localStorage.getItem('todo-board:teacherName') || '老师'
+  studentName.value = localStorage.getItem('todo-board:studentName') || '学生'
+}
+
+/** 当前类型下各状态的数量 */
+export const statusCounts = computed<Record<StatusKey | 'all', number>>(() => {
+  const base: Record<string, number> = { all: 0 }
+  const scoped = items.value.filter((it) => it.type === activeType.value)
+  base.all = scoped.length
+  for (const it of scoped) base[it.status] = (base[it.status] ?? 0) + 1
+  return base as Record<StatusKey | 'all', number>
+})
+
+/** 左侧两类各自的待办数量（不含验证通过） */
+export const typeCounts = computed<Record<ItemType, { total: number; open: number }>>(() => {
+  const mk = () => ({ total: 0, open: 0 })
+  const out: Record<ItemType, { total: number; open: number }> = {
+    requirement: mk(),
+    defect: mk(),
+  }
+  for (const it of items.value) {
+    out[it.type].total += 1
+    if (it.status !== 'passed') out[it.type].open += 1
+  }
+  return out
+})
+
+/** 当前展示的列表 */
+export const visibleItems = computed(() => {
+  const list = items.value.filter((it) => it.type === activeType.value)
+  const filtered = statusFilter.value === 'all' ? list : list.filter((it) => it.status === statusFilter.value)
+  return [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+})
+
+export const activeItem = computed(() => items.value.find((it) => it.id === activeId.value) ?? null)
+
+export async function refresh(): Promise<void> {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    items.value = await api.list()
+    if (activeId.value && !items.value.some((it) => it.id === activeId.value)) {
+      activeId.value = ''
+    }
+    if (!activeId.value && visibleItems.value.length > 0) {
+      activeId.value = visibleItems.value[0].id
+    }
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function replaceItem(next: Item): void {
+  const idx = items.value.findIndex((it) => it.id === next.id)
+  if (idx > -1) items.value[idx] = next
+}
+
+export async function createItem(draft: ItemDraft): Promise<Item | null> {
+  errorMessage.value = ''
+  try {
+    const created = await api.create(draft)
+    items.value = [created, ...items.value]
+    activeType.value = created.type
+    statusFilter.value = 'all'
+    activeId.value = created.id
+    return created
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '创建失败'
+    return null
+  }
+}
+
+export async function patchItem(id: string, patch: ItemPatch): Promise<void> {
+  errorMessage.value = ''
+  try {
+    replaceItem(await api.update(id, patch))
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '更新失败'
+  }
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  errorMessage.value = ''
+  try {
+    await api.remove(id)
+    items.value = items.value.filter((it) => it.id !== id)
+    if (activeId.value === id) {
+      activeId.value = visibleItems.value[0]?.id ?? ''
+    }
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '删除失败'
+  }
+}
+
+export async function addComment(id: string, body: string): Promise<boolean> {
+  errorMessage.value = ''
+  try {
+    await api.addComment(id, { author: effectiveName.value, role: currentRole.value, body })
+    const fresh = (await api.list()).find((it) => it.id === id)
+    if (fresh) replaceItem(fresh)
+    return true
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '评论失败'
+    return false
+  }
+}
+
+export function selectType(type: ItemType): void {
+  activeType.value = type
+  statusFilter.value = 'all'
+  activeId.value = visibleItems.value[0]?.id ?? ''
+}
+
+export function selectStatus(status: StatusKey | 'all'): void {
+  statusFilter.value = status
+  if (!visibleItems.value.some((it) => it.id === activeId.value)) {
+    activeId.value = visibleItems.value[0]?.id ?? ''
+  }
+}
