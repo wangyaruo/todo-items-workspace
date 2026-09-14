@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import StatusBadge from './StatusBadge.vue'
+import StatusFilter from './StatusFilter.vue'
 import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
 import {
   activeId,
@@ -129,19 +130,8 @@ function excerpt(text: string): string {
       </div>
     </div>
 
-    <div class="filters">
-      <button
-        v-for="f in filters"
-        :key="f.key"
-        class="chip"
-        :class="{ 'chip--on': statusFilter === f.key }"
-        :style="statusFilter === f.key ? { '--chip': f.color } : {}"
-        @click="selectStatus(f.key)"
-      >
-        <i v-if="f.key !== 'all'" class="chip-dot" :style="{ background: f.color }" />
-        {{ f.label }}
-        <span class="chip-n">{{ f.count }}</span>
-      </button>
+    <div class="filter-bar">
+      <StatusFilter :model-value="statusFilter" :options="filters" @update:model-value="selectStatus" />
     </div>
 
     <div v-if="picking" class="bulkbar" :class="{ 'bulkbar--danger': confirming }">
@@ -336,69 +326,15 @@ function excerpt(text: string): string {
 }
 
 /* ---------- 筛选 ---------- */
-.filters {
+.filter-bar {
+  position: relative;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
   flex: none;
+  padding: 10px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-  scrollbar-width: none;
-}
-
-.filters::-webkit-scrollbar {
-  display: none;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: #fff;
-  font-size: 12.5px;
-  color: var(--text-2);
-  white-space: nowrap;
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
-}
-
-.chip:hover {
-  border-color: var(--border-strong);
-  background: var(--panel-soft);
-}
-
-.chip--on {
-  background: var(--chip);
-  border-color: var(--chip);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
-}
-
-.chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.chip--on .chip-dot {
-  background: #fff !important;
-  opacity: 0.9;
-}
-
-.chip-n {
-  font-size: 11px;
-  opacity: 0.7;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- 批量操作条 ---------- */

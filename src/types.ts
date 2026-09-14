@@ -51,3 +51,11 @@ export interface ItemDraft {
 
 /** 当前操作人身份（仅用于署名与默认视角，不做权限隔离） */
 export type Role = 'product' | 'developer'
+
+/** 状态筛选下拉的一个选项（'all' 表示不筛选） */
+export interface FilterOption {
+  key: StatusKey | 'all'
+  label: string
+  count: number
+  color: string
+}
