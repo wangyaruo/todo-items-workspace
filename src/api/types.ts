@@ -1,4 +1,4 @@
-import type { Item, ItemType, Role, StatusKey } from '@/types'
+import type { Item, ItemDraft, ItemType, Role, StatusKey } from '@/types'
 
 /** 可局部更新的字段 */
 export interface ItemPatch {
@@ -21,18 +21,10 @@ export interface NewComment {
  */
 export interface BoardApi {
   list(): Promise<Item[]>
-  create(draft: ItemDraftLike): Promise<Item>
+  create(draft: ItemDraft): Promise<Item>
   update(id: string, patch: ItemPatch): Promise<Item>
   remove(id: string): Promise<void>
   addComment(id: string, payload: NewComment): Promise<Item>
   uploadAttachment(id: string, file: File): Promise<Item>
   removeAttachment(id: string, attachmentId: string): Promise<Item>
-}
-
-/** create 的入参：附件在条目创建后单独上传 */
-export interface ItemDraftLike {
-  type: ItemType
-  title: string
-  description: string
-  status: StatusKey
 }

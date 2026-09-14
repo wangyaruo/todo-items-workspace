@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AttachmentField from './AttachmentField.vue'
-import { ITEM_TYPES, MAX_ATTACHMENTS_PER_ITEM, MAX_ATTACHMENT_BYTES, STATUS_FLOW } from '@/constants'
+import { ITEM_TYPES, STATUS_FLOW } from '@/constants'
 import { activeType, composerOpen, createItem } from '@/store/board'
+import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard } from '@/utils/clipboard'
-import { formatSize } from '@/utils/format'
 import type { Attachment, ItemType, StatusKey } from '@/types'
 
 const type = ref<ItemType>('requirement')
@@ -46,24 +46,6 @@ function onKey(e: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
-/** 数量与大小校验：粘贴进来的图片走同一条规则 */
-function accept(files_: File[]): File[] {
-  const room = MAX_ATTACHMENTS_PER_ITEM - previews.value.length
-  const out: File[] = []
-  for (const file of files_) {
-    if (out.length >= room) {
-      err.value = `每条最多 ${MAX_ATTACHMENTS_PER_ITEM} 个附件。`
-      break
-    }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      err.value = `「${file.name}」${formatSize(file.size)}，超过单文件 ${formatSize(MAX_ATTACHMENT_BYTES)} 上限。`
-      continue
-    }
-    out.push(file)
-  }
-  return out
-}
-
 function onAddFiles(picked: File[]): void {
   for (const file of picked) {
     files.value.push(file)
@@ -92,10 +74,11 @@ function onPasteDesc(event: ClipboardEvent): void {
   if (images.length === 0) return
   event.preventDefault()
   err.value = ''
-  const picked = accept(images)
-  if (picked.length === 0) return
-  onAddFiles(picked)
-  pasteNote.value = `已添加 ${picked.length} 张截图`
+  const { accepted, error } = acceptFiles(images, previews.value.length)
+  if (error) err.value = error
+  if (accepted.length === 0) return
+  onAddFiles(accepted)
+  pasteNote.value = `已添加 ${accepted.length} 张截图`
 }
 
 function close(): void {

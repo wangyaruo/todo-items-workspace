@@ -1,11 +1,3 @@
-/// <reference types="vite/client" />
-
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue'
-  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
-  export default component
-}
-
 interface ImportMetaEnv {
   /** local = 浏览器本地存储；其它值 / 未设置 = 调后端接口 */
   readonly VITE_API_MODE?: string

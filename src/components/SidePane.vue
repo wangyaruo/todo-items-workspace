@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { ITEM_TYPES } from '@/constants'
+import { ITEM_TYPES, ROLE_LABEL } from '@/constants'
 import { activeType, currentRole, composerOpen, selectType, setRole, typeCounts } from '@/store/board'
 import type { Role } from '@/types'
 
-const ROLES: { key: Role; label: string }[] = [
-  { key: 'product', label: '产品' },
-  { key: 'developer', label: '开发' },
-]
+/** 选项与称呼都来自 ROLE_LABEL，角色文案只在那处定义一次 */
+const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: ROLE_LABEL[key] }))
 </script>
 
 <template>

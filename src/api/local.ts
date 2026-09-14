@@ -1,6 +1,6 @@
-import type { Attachment, Item } from '@/types'
+import type { Attachment, Item, ItemDraft } from '@/types'
 import { uid } from '@/utils/format'
-import type { BoardApi, ItemDraftLike, NewComment } from './types'
+import type { BoardApi, NewComment } from './types'
 
 /**
  * 浏览器本地存储实现。
@@ -52,7 +52,7 @@ export const localApi: BoardApi = {
     return readAll().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
 
-  async create(draft: ItemDraftLike) {
+  async create(draft: ItemDraft) {
     const now = new Date().toISOString()
     const item: Item = {
       id: uid('item'),

@@ -4,13 +4,7 @@ import StatusBadge from './StatusBadge.vue'
 import AttachmentField from './AttachmentField.vue'
 import CommentThread from './CommentThread.vue'
 import ImageLightbox from './ImageLightbox.vue'
-import {
-  MAX_ATTACHMENTS_PER_ITEM,
-  MAX_ATTACHMENT_BYTES,
-  STATUS_FLOW,
-  statusMeta,
-  typeMeta,
-} from '@/constants'
+import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
 import {
   activeItem,
   attachmentBusy,
@@ -21,8 +15,9 @@ import {
   removeAttachment,
   uploadAttachments,
 } from '@/store/board'
+import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard, isImageMime } from '@/utils/clipboard'
-import { formatDateTime, formatSize } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 import type { Attachment, StatusKey } from '@/types'
 
 const editing = ref(false)
@@ -57,26 +52,6 @@ const shortId = computed(() => activeItem.value?.id.replace(/^item_/, '').slice(
 
 /** 描述区展示的图片：附件中的图片部分 */
 const shots = computed(() => (activeItem.value?.attachments ?? []).filter((a) => isImageMime(a.mime)))
-
-/** 上传前的本地校验：数量与单文件大小 */
-function accept(files: File[]): File[] {
-  const it = activeItem.value
-  if (!it) return []
-  const room = MAX_ATTACHMENTS_PER_ITEM - it.attachments.length
-  const out: File[] = []
-  for (const file of files) {
-    if (out.length >= room) {
-      localError.value = `每条最多 ${MAX_ATTACHMENTS_PER_ITEM} 个附件。`
-      break
-    }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      localError.value = `「${file.name}」${formatSize(file.size)}，超过单文件 ${formatSize(MAX_ATTACHMENT_BYTES)} 上限。`
-      continue
-    }
-    out.push(file)
-  }
-  return out
-}
 
 function startEdit(): void {
   const it = activeItem.value
@@ -141,12 +116,13 @@ async function onPasteDesc(event: ClipboardEvent): Promise<void> {
 
   event.preventDefault()
   localError.value = ''
-  const files = accept(images)
-  if (files.length === 0) return
+  const { accepted, error } = acceptFiles(images, it.attachments.length)
+  if (error) localError.value = error
+  if (accepted.length === 0) return
 
-  pasteNote.value = `正在上传 ${files.length} 张截图…`
-  await uploadAttachments(it.id, files)
-  pasteNote.value = attachmentError.value ? '' : `已添加 ${files.length} 张截图`
+  pasteNote.value = `正在上传 ${accepted.length} 张截图…`
+  await uploadAttachments(it.id, accepted)
+  pasteNote.value = attachmentError.value ? '' : `已添加 ${accepted.length} 张截图`
 }
 
 function pickShots(): void {
@@ -159,8 +135,9 @@ function onPickShots(event: Event): void {
   input.value = ''
   if (picked.length === 0) return
   localError.value = ''
-  const files = accept(picked)
-  if (files.length > 0) onAddFiles(files)
+  const { accepted, error } = acceptFiles(picked, activeItem.value?.attachments.length ?? 0)
+  if (error) localError.value = error
+  if (accepted.length > 0) onAddFiles(accepted)
 }
 
 async function doDelete(): Promise<void> {

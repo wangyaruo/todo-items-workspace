@@ -1,21 +1,17 @@
 import { computed, ref } from 'vue'
 import { api, type ItemPatch } from '@/api'
+import { ROLE_LABEL } from '@/constants'
 import type { Item, ItemDraft, ItemType, Role, StatusKey } from '@/types'
 
 /** 全局状态（模块级单例，组件直接引入使用） */
 export const items = ref<Item[]>([])
-export const loading = ref(false)
 export const errorMessage = ref('')
 export const activeType = ref<ItemType>('requirement')
 export const activeId = ref('')
 export const statusFilter = ref<StatusKey | 'all'>('all')
 export const currentRole = ref<Role>(readRole())
-export const displayName = ref(readName())
 /** 新建面板是否展开 */
 export const composerOpen = ref(false)
-
-export const productName = ref('产品')
-export const developerName = ref('开发')
 
 function readRole(): Role {
   const v = localStorage.getItem('todo-board:role')
@@ -24,39 +20,12 @@ function readRole(): Role {
   return 'product'
 }
 
-function readName(): string {
-  return localStorage.getItem(`todo-board:name:${readRole()}`) ?? ''
-}
-
-/** 当前显示名的兜底：未自定义时按角色给默认称呼 */
-export const effectiveName = computed(
-  () => displayName.value.trim() || (currentRole.value === 'product' ? productName.value : developerName.value),
-)
+/** 评论署名：固定用角色名，不做自定义 */
+export const effectiveName = computed(() => ROLE_LABEL[currentRole.value])
 
 export function setRole(role: Role): void {
   currentRole.value = role
   localStorage.setItem('todo-board:role', role)
-  displayName.value = localStorage.getItem(`todo-board:name:${role}`) ?? ''
-}
-
-export function setName(name: string): void {
-  displayName.value = name
-  localStorage.setItem(`todo-board:name:${currentRole.value}`, name)
-}
-
-export function setProductName(name: string): void {
-  productName.value = name.trim() || '产品'
-  localStorage.setItem('todo-board:productName', productName.value)
-}
-
-export function setDeveloperName(name: string): void {
-  developerName.value = name.trim() || '开发'
-  localStorage.setItem('todo-board:developerName', developerName.value)
-}
-
-export function loadNames(): void {
-  productName.value = localStorage.getItem('todo-board:productName') || '产品'
-  developerName.value = localStorage.getItem('todo-board:developerName') || '开发'
 }
 
 /** 当前类型下各状态的数量 */
@@ -92,7 +61,6 @@ export const visibleItems = computed(() => {
 export const activeItem = computed(() => items.value.find((it) => it.id === activeId.value) ?? null)
 
 export async function refresh(): Promise<void> {
-  loading.value = true
   errorMessage.value = ''
   try {
     items.value = await api.list()
@@ -104,8 +72,6 @@ export async function refresh(): Promise<void> {
     }
   } catch (err) {
     errorMessage.value = (err as Error).message || '加载失败'
-  } finally {
-    loading.value = false
   }
 }
 

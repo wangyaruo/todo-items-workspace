@@ -55,7 +55,8 @@
 │   │   └── index.ts        按环境变量选择实现
 │   ├── components/         9 个组件（含状态筛选下拉 StatusFilter、图片查看器 ImageLightbox）
 │   ├── store/board.ts      全局状态
-│   ├── utils/              格式化工具 + clipboard.ts（粘贴取图）+ select.ts（下拉导航）
+│   ├── utils/              format（时间与大小）/ clipboard（粘贴取图）
+│   │                       select（下拉导航）/ attachments（附件校验，三处入口共用）
 │   └── constants.ts        状态与文案定义
 └── server/                 后端（Node + Express + MySQL）
     ├── src/

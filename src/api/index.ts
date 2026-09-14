@@ -2,7 +2,7 @@ import { httpApi } from './http'
 import { localApi } from './local'
 import type { BoardApi } from './types'
 
-export type { BoardApi, ItemDraftLike, ItemPatch, NewComment } from './types'
+export type { BoardApi, ItemPatch, NewComment } from './types'
 
 /**
  * 数据源切换（通过环境变量控制）：

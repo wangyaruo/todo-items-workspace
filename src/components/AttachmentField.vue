@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { MAX_ATTACHMENTS_PER_ITEM, MAX_ATTACHMENT_BYTES } from '@/constants'
+import { acceptFiles } from '@/utils/attachments'
 import { isImageMime } from '@/utils/clipboard'
 import { extOf, formatSize } from '@/utils/format'
 import type { Attachment } from '@/types'
@@ -38,21 +39,8 @@ function onPick(event: Event): void {
   localError.value = ''
   if (files.length === 0) return
 
-  const room = MAX_ATTACHMENTS_PER_ITEM - props.items.length
-  const accepted: File[] = []
-
-  for (const file of files) {
-    if (accepted.length >= room) {
-      localError.value = `每条最多 ${MAX_ATTACHMENTS_PER_ITEM} 个附件。`
-      break
-    }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      localError.value = `「${file.name}」${formatSize(file.size)}，超过单文件 ${formatSize(MAX_ATTACHMENT_BYTES)} 上限。`
-      continue
-    }
-    accepted.push(file)
-  }
-
+  const { accepted, error } = acceptFiles(files, props.items.length)
+  if (error) localError.value = error
   if (accepted.length > 0) emit('add', accepted)
 }
 
