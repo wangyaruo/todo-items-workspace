@@ -60,8 +60,9 @@
 │   └── constants.ts        状态与文案定义
 └── server/                 后端（Node + Express + MySQL）
     ├── src/
-    │   ├── index.js        Express 入口
+    │   ├── index.js        Express 入口（同时托管前端 dist/）
     │   ├── db.js           MySQL 连接池
+    │   ├── paths.js        附件目录 / 前端产物目录
     │   ├── schema.sql      建表语句
     │   ├── init-db.js      建库 + 建表
     │   ├── check-db.js     连接自检
@@ -69,6 +70,9 @@
     ├── uploads/            附件落盘目录（已 gitignore）
     └── .env.example        配置模板
 ```
+
+根目录的 `dist/` 是 `npm run build` 的产物，后端启动时自动托管，已 gitignore。
+缺失时服务照常启动，只是不提供页面。
 
 ## 本地开发
 
@@ -79,7 +83,7 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-开发服务器已配好代理：`/api` 与 `/uploads` 自动转发到 `127.0.0.1:3000`。
+开发服务器已配好代理：`/api` 与 `/uploads` 自动转发到 `127.0.0.1:8218`。
 后端地址不同时，用 `VITE_API_TARGET` 覆盖。
 
 ### 后端
@@ -89,14 +93,14 @@ cd server
 cp .env.example .env    # 填数据库连接信息
 npm install
 npm run init-db         # 建库 + 建三张表
-npm run dev             # 默认 3000 端口
+npm run dev             # 默认 8218 端口
 ```
 
 自检：
 
 ```bash
 npm run check           # 打印 MySQL 版本与已有的表
-curl http://127.0.0.1:3000/api/health
+curl http://127.0.0.1:8218/api/health
 ```
 
 ## 数据源切换
@@ -112,31 +116,73 @@ curl http://127.0.0.1:3000/api/health
 VITE_API_BASE=https://api.你的域名.com
 ```
 
-## 部署到自己的服务器
+## 部署到自己的服务器（单端口同源）
 
-1. 服务器安装 Node.js 18+ 与 MySQL
-2. 拉取代码，进入 `server/`，`cp .env.example .env` 并填好数据库连接
-3. `npm install && npm run init-db` 建库建表
-4. `npm start` 启动后端，建议用 pm2 常驻：`pm2 start src/index.js --name todo-items-api`
-5. 回到项目根目录 `npm install && npm run build`，产出 `dist/`
-6. Nginx 托管 `dist/`，并把 `/api` 与 `/uploads` 反向代理到后端 3000 端口
+前端构建产物由后端进程一并托管，因此**只需一个端口**（本项目部署在 `8218`），
+直接用 `http://服务器IP:8218` 访问即可——不需要 Nginx，也不涉及跨域。
 
-Nginx 关键片段：
+1. 安装运行环境（Ubuntu / Debian）：
+
+   ```bash
+   apt install -y mysql-server
+   # Node.js 18+ 需另行安装
+   ```
+
+2. 建库与专用账号（用 MySQL 的 root 执行一次；应用不要直接用 root）：
+
+   ```sql
+   CREATE DATABASE todo_items CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'todo_app'@'127.0.0.1' IDENTIFIED BY '换成你的密码';
+   GRANT ALL PRIVILEGES ON todo_items.* TO 'todo_app'@'127.0.0.1';
+   FLUSH PRIVILEGES;
+   ```
+
+3. 构建前端（在项目根目录）：
+
+   ```bash
+   npm install
+   npm run build          # 产出 dist/
+   ```
+
+4. 配置并启动后端：
+
+   ```bash
+   cd server
+   cp .env.example .env   # 填 DB_USER / DB_PASSWORD；PORT 默认 8218
+   npm install
+   npm run init-db        # 建三张表
+   pm2 start src/index.js --name todo-items
+   pm2 save
+   ```
+
+5. 若服务器启用了防火墙，放行 8218，然后自检：
+
+   ```bash
+   curl http://127.0.0.1:8218/api/health
+   ```
+
+### 更新已部署的版本
+
+```bash
+cd /opt/todo-items
+git pull
+npm install && npm run build     # 前端有改动时
+cd server && npm install         # 后端依赖有改动时
+pm2 restart todo-items
+```
+
+### 为什么不用 Nginx
+
+`server/src/index.js` 用 `express.static` 托管 `dist/`，非接口路径回落到 `index.html`；
+前后端同源，`src/api/http.ts` 走相对路径请求——既不反向代理也不需要 CORS。
+
+将来若要绑域名 + HTTPS，在 Nginx 里反代到本服务即可，后端无需改动：
 
 ```nginx
 location / {
-    root /var/www/todo-items/dist;
-    try_files $uri $uri/ /index.html;
-}
-
-location /api {
-    proxy_pass http://127.0.0.1:3000;
+    proxy_pass http://127.0.0.1:8218;
     proxy_set_header Host $host;
-}
-
-location /uploads {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
+    client_max_body_size 12m;   # 附件上限 10MB，留余量
 }
 ```
 
@@ -169,9 +215,10 @@ location /uploads {
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `DB_HOST` / `DB_PORT` | 127.0.0.1 / 3306 | MySQL 地址 |
-| `DB_USER` / `DB_PASSWORD` | root / 空 | 数据库账号 |
+| `DB_HOST` / `DB_PORT` | 127.0.0.1 / 3306 | MySQL 地址（仅本机可连） |
+| `DB_USER` / `DB_PASSWORD` | todo_app / 空 | 数据库账号，建议用只授权本库的专用账号 |
 | `DB_NAME` | todo_items | 库名 |
-| `PORT` | 3000 | 后端端口 |
-| `CORS_ORIGIN` | http://localhost:5173 | 允许的前端来源，逗号分隔 |
+| `PORT` | 8218 | 后端监听端口，同时用于访问前端页面 |
+| `CORS_ORIGIN` | 空 | 允许的前端来源，逗号分隔。留空即禁止跨域（同源部署不需要） |
 | `MAX_UPLOAD_BYTES` | 10485760 | 单文件上限，10MB |
+| `WEB_DIR` | 仓库根 `dist/` | 前端构建产物目录，一般不用改 |

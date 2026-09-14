@@ -12,7 +12,7 @@ declare const process: { env: Record<string, string | undefined> }
 const srcDir = decodeURIComponent(new URL('./src', import.meta.url).pathname)
 
 /** 后端服务地址，可用环境变量 VITE_API_TARGET 覆盖 */
-const apiTarget = process.env.VITE_API_TARGET || 'http://127.0.0.1:3000'
+const apiTarget = process.env.VITE_API_TARGET || 'http://127.0.0.1:8218'
 
 export default defineConfig({
   plugins: [vue()],

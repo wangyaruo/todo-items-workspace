@@ -4,17 +4,31 @@ import { join } from 'node:path'
 import { DB_NAME, serverOptions } from './db.js'
 import { here } from './paths.js'
 
-const conn = await mysql.createConnection({
-  ...serverOptions,
-  multipleStatements: true,
-})
+/**
+ * 优先直接连目标库：库已存在时就不需要 CREATE DATABASE 权限，
+ * 专用账号（只有目标库权限）也能完成建表。
+ * 连不上（库不存在 / 没权限）再退回建库流程，此时需要较高权限。
+ */
+async function connect() {
+  try {
+    return await mysql.createConnection({
+      ...serverOptions,
+      database: DB_NAME,
+      multipleStatements: true,
+    })
+  } catch {
+    const conn = await mysql.createConnection({ ...serverOptions, multipleStatements: true })
+    await conn.query(
+      `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    )
+    await conn.query(`USE \`${DB_NAME}\``)
+    return conn
+  }
+}
+
+const conn = await connect()
 
 try {
-  await conn.query(
-    `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-  )
-  await conn.query(`USE \`${DB_NAME}\``)
-
   const sql = await readFile(join(here, 'schema.sql'), 'utf8')
   await conn.query(sql)
 
