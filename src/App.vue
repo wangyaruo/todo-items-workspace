@@ -31,7 +31,7 @@ const passed = computed(() => total.value - open.value)
         </span>
         <span class="brand-txt">
           <b>需求协作板</b>
-          <em>老师提需求 · 学生回完成情况</em>
+          <em>产品提需求 · 开发回完成情况</em>
         </span>
       </div>
 
@@ -226,12 +226,12 @@ const passed = computed(() => total.value - open.value)
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--teacher);
+  background: var(--product);
   box-shadow: 0 0 0 3px rgba(59, 111, 212, 0.16);
 }
 
-.who--student .who-dot {
-  background: var(--student);
+.who--developer .who-dot {
+  background: var(--developer);
   box-shadow: 0 0 0 3px rgba(20, 134, 111, 0.16);
 }
 

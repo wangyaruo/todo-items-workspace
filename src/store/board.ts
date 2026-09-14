@@ -14,12 +14,14 @@ export const displayName = ref(readName())
 /** 新建面板是否展开 */
 export const composerOpen = ref(false)
 
-export const teacherName = ref('老师')
-export const studentName = ref('学生')
+export const productName = ref('产品')
+export const developerName = ref('开发')
 
 function readRole(): Role {
   const v = localStorage.getItem('todo-board:role')
-  return v === 'student' ? 'student' : 'teacher'
+  // 兼容早期版本写入的 teacher / student
+  if (v === 'developer' || v === 'student') return 'developer'
+  return 'product'
 }
 
 function readName(): string {
@@ -28,7 +30,7 @@ function readName(): string {
 
 /** 当前显示名的兜底：未自定义时按角色给默认称呼 */
 export const effectiveName = computed(
-  () => displayName.value.trim() || (currentRole.value === 'teacher' ? teacherName.value : studentName.value),
+  () => displayName.value.trim() || (currentRole.value === 'product' ? productName.value : developerName.value),
 )
 
 export function setRole(role: Role): void {
@@ -42,19 +44,19 @@ export function setName(name: string): void {
   localStorage.setItem(`todo-board:name:${currentRole.value}`, name)
 }
 
-export function setTeacherName(name: string): void {
-  teacherName.value = name.trim() || '老师'
-  localStorage.setItem('todo-board:teacherName', teacherName.value)
+export function setProductName(name: string): void {
+  productName.value = name.trim() || '产品'
+  localStorage.setItem('todo-board:productName', productName.value)
 }
 
-export function setStudentName(name: string): void {
-  studentName.value = name.trim() || '学生'
-  localStorage.setItem('todo-board:studentName', studentName.value)
+export function setDeveloperName(name: string): void {
+  developerName.value = name.trim() || '开发'
+  localStorage.setItem('todo-board:developerName', developerName.value)
 }
 
 export function loadNames(): void {
-  teacherName.value = localStorage.getItem('todo-board:teacherName') || '老师'
-  studentName.value = localStorage.getItem('todo-board:studentName') || '学生'
+  productName.value = localStorage.getItem('todo-board:productName') || '产品'
+  developerName.value = localStorage.getItem('todo-board:developerName') || '开发'
 }
 
 /** 当前类型下各状态的数量 */

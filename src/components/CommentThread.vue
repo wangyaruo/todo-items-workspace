@@ -48,7 +48,7 @@ function initial(name: string): string {
       </article>
     </div>
 
-    <p v-else class="none">还没有完成情况记录，学生做完后在这里说明。</p>
+    <p v-else class="none">还没有完成情况记录，开发做完后在这里说明。</p>
 
     <div class="editor">
       <div class="editor-head">
@@ -111,12 +111,12 @@ function initial(name: string): string {
   box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.12);
 }
 
-.avatar--teacher {
-  background: linear-gradient(160deg, #5b8ce8, var(--teacher));
+.avatar--product {
+  background: linear-gradient(160deg, #5b8ce8, var(--product));
 }
 
-.avatar--student {
-  background: linear-gradient(160deg, #2aab8e, var(--student));
+.avatar--developer {
+  background: linear-gradient(160deg, #2aab8e, var(--developer));
 }
 
 .cmt-main {
@@ -146,12 +146,12 @@ function initial(name: string): string {
   line-height: 19px;
 }
 
-.cmt-role--teacher {
+.cmt-role--product {
   background: #eaf1fd;
   color: #2b5cb8;
 }
 
-.cmt-role--student {
+.cmt-role--developer {
   background: #e6f6f1;
   color: #0f6d5b;
 }
@@ -173,7 +173,7 @@ function initial(name: string): string {
   word-break: break-word;
 }
 
-.cmt--student .cmt-body {
+.cmt--developer .cmt-body {
   background: #f4fbf8;
   border-color: #dcefe8;
 }

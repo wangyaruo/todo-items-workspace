@@ -19,11 +19,11 @@ export interface Attachment {
   uploadedAt: string
 }
 
-/** 评论（学生填写完成情况） */
+/** 评论（开发填写完成情况） */
 export interface Comment {
   id: string
   author: string
-  role: 'teacher' | 'student'
+  role: 'product' | 'developer'
   body: string
   createdAt: string
 }
@@ -50,4 +50,4 @@ export interface ItemDraft {
 }
 
 /** 当前操作人身份（仅用于署名与默认视角，不做权限隔离） */
-export type Role = 'teacher' | 'student'
+export type Role = 'product' | 'developer'

@@ -24,7 +24,7 @@ export interface StatusMeta {
   bg: string
   /** 边框色 */
   border: string
-  /** 给学生的操作提示 */
+  /** 给开发的操作提示 */
   hint: string
 }
 
@@ -35,7 +35,7 @@ export const STATUS_FLOW: StatusMeta[] = [
     color: '#5b6b7f',
     bg: '#f1f5f9',
     border: '#dbe3ec',
-    hint: '需求已下达，等待学生开始',
+    hint: '需求已下达，等待开发开始',
   },
   {
     key: 'developing',
@@ -43,7 +43,7 @@ export const STATUS_FLOW: StatusMeta[] = [
     color: '#2563eb',
     bg: '#eff6ff',
     border: '#cfe0fb',
-    hint: '学生正在动手完成',
+    hint: '开发正在动手完成',
   },
   {
     key: 'verifying',
@@ -51,7 +51,7 @@ export const STATUS_FLOW: StatusMeta[] = [
     color: '#b45309',
     bg: '#fffbeb',
     border: '#fbe4b8',
-    hint: '学生已完成，等待老师验收',
+    hint: '开发已完成，等待产品验收',
   },
   {
     key: 'passed',
@@ -59,7 +59,7 @@ export const STATUS_FLOW: StatusMeta[] = [
     color: '#047857',
     bg: '#ecfdf5',
     border: '#bbe7d4',
-    hint: '老师验收通过，此条归档',
+    hint: '产品验收通过，此条归档',
   },
   {
     key: 'rework',
@@ -76,8 +76,8 @@ export function statusMeta(key: StatusKey): StatusMeta {
 }
 
 export const ROLE_LABEL: Record<Role, string> = {
-  teacher: '老师',
-  student: '学生',
+  product: '产品',
+  developer: '开发',
 }
 
 /** 单文件大小上限（与后端 MAX_UPLOAD_BYTES 保持一致） */

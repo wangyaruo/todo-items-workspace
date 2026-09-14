@@ -145,7 +145,7 @@ async function submit(): Promise<void> {
           </span>
           <span class="sheet-title-txt">
             <b>新建{{ currentLabel }}</b>
-            <em>写清楚要做什么，学生照这个做</em>
+            <em>写清楚要做什么，开发照这个做</em>
           </span>
         </div>
         <button class="x" title="关闭" @click="close">

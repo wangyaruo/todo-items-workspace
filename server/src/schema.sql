@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS comments (
   id         VARCHAR(36) NOT NULL,
   item_id    VARCHAR(36) NOT NULL,
   author     VARCHAR(50) NOT NULL,
-  role       VARCHAR(16) NOT NULL COMMENT 'teacher / student',
+  role       VARCHAR(16) NOT NULL COMMENT 'product / developer',
   body       TEXT        NOT NULL,
   created_at DATETIME(3) NOT NULL,
   PRIMARY KEY (id),

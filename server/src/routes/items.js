@@ -232,7 +232,8 @@ router.post('/:id/comments', async (req, res, next) => {
         id,
         req.params.id,
         String(author || '匿名').slice(0, 50),
-        role === 'student' ? 'student' : 'teacher',
+        // 兼容早期版本写入的 teacher / student
+        role === 'developer' || role === 'student' ? 'developer' : 'product',
         String(body),
         now,
       ],

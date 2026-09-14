@@ -4,8 +4,8 @@ import { activeType, currentRole, composerOpen, selectType, setRole, typeCounts 
 import type { Role } from '@/types'
 
 const ROLES: { key: Role; label: string }[] = [
-  { key: 'teacher', label: '老师' },
-  { key: 'student', label: '学生' },
+  { key: 'product', label: '产品' },
+  { key: 'developer', label: '开发' },
 ]
 </script>
 
