@@ -35,7 +35,7 @@ function initial(name: string): string {
 <template>
   <div class="thread">
     <div v-if="comments.length" class="items">
-      <article v-for="c in comments" :key="c.id" class="cmt">
+      <article v-for="c in comments" :key="c.id" class="cmt" :class="`cmt--${c.role}`">
         <span class="avatar" :class="`avatar--${c.role}`">{{ initial(c.author) }}</span>
         <div class="cmt-main">
           <div class="cmt-head">
@@ -48,13 +48,14 @@ function initial(name: string): string {
       </article>
     </div>
 
-    <p v-else class="none">还没有完成情况记录。</p>
+    <p v-else class="none">还没有完成情况记录，学生做完后在这里说明。</p>
 
     <div class="editor">
       <div class="editor-head">
         <span class="editor-as">
-          以 <b>{{ effectiveName }}</b>（{{ roleLabel }}）的身份记录
+          以 <b>{{ effectiveName }}</b> 的身份记录
         </span>
+        <span class="cmt-role" :class="`cmt-role--${currentRole}`">{{ roleLabel }}</span>
       </div>
       <textarea
         v-model="body"
@@ -65,7 +66,11 @@ function initial(name: string): string {
         @keydown.ctrl.enter="submit"
       />
       <div class="editor-foot">
-        <span class="kbd-hint">Ctrl / ⌘ + Enter 快速提交</span>
+        <span class="kbd-hint">
+          <span class="kbd">⌘</span>
+          <span class="kbd">Enter</span>
+          快速提交
+        </span>
         <button class="btn btn-primary btn-sm" :disabled="!body.trim() || submitting" @click="submit">
           {{ submitting ? '提交中…' : '提交' }}
         </button>
@@ -79,13 +84,13 @@ function initial(name: string): string {
 .thread {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .items {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
 }
 
 .cmt {
@@ -96,21 +101,22 @@ function initial(name: string): string {
 .avatar {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 31px;
+  height: 31px;
   flex: none;
   border-radius: 50%;
   font-size: 12.5px;
   font-weight: 700;
   color: #fff;
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.12);
 }
 
 .avatar--teacher {
-  background: #3b6fd4;
+  background: linear-gradient(160deg, #5b8ce8, var(--teacher));
 }
 
 .avatar--student {
-  background: #14866f;
+  background: linear-gradient(160deg, #2aab8e, var(--student));
 }
 
 .cmt-main {
@@ -122,7 +128,7 @@ function initial(name: string): string {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
 }
 
@@ -132,12 +138,12 @@ function initial(name: string): string {
 }
 
 .cmt-role {
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 5px;
   font-size: 10.5px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 19px;
 }
 
 .cmt-role--teacher {
@@ -157,14 +163,19 @@ function initial(name: string): string {
 
 .cmt-body {
   margin: 0;
-  padding: 9px 12px;
-  border-radius: 8px;
-  background: var(--panel-soft);
+  padding: 10px 13px;
+  border-radius: 4px 11px 11px 11px;
+  background: var(--panel-inset);
   border: 1px solid var(--border);
   font-size: 13.5px;
-  line-height: 1.68;
+  line-height: 1.72;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.cmt--student .cmt-body {
+  background: #f4fbf8;
+  border-color: #dcefe8;
 }
 
 .none {
@@ -176,16 +187,27 @@ function initial(name: string): string {
 .editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-soft);
 }
 
-.editor-as {
+.editor-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 12px;
   color: var(--text-2);
 }
 
+.editor-as b {
+  color: var(--text);
+}
+
 .editor-input {
-  line-height: 1.65;
+  background: #fff;
 }
 
 .editor-foot {
@@ -196,13 +218,10 @@ function initial(name: string): string {
 }
 
 .kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11.5px;
   color: var(--text-3);
-}
-
-.err {
-  margin: 0;
-  font-size: 12px;
-  color: var(--danger);
 }
 </style>

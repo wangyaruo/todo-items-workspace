@@ -66,35 +66,35 @@ const ROLES: { key: Role; label: string }[] = [
         {{ r.label }}
       </button>
     </div>
-    <p class="role-note">仅用于评论署名，不做权限限制。</p>
+    <p class="role-note">仅用于评论署名，不做权限限制</p>
 
     <button class="btn btn-primary new-btn" @click="composerOpen = true">
       <svg viewBox="0 0 16 16" width="14" height="14">
-        <path d="M8 3.4v9.2M3.4 8h9.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M8 3.4v9.2M3.4 8h9.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
       </svg>
-      新建
+      新建{{ activeType === 'defect' ? '缺陷' : '需求' }}
     </button>
   </aside>
 </template>
 
 <style scoped>
 .side {
-  width: 208px;
+  width: 218px;
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 16px 12px;
+  padding: 16px 12px 14px;
   background: var(--panel);
   border-right: 1px solid var(--border);
 }
 
 .group-title {
-  padding: 0 8px;
-  margin: 6px 0 7px;
-  font-size: 11px;
+  padding: 0 9px;
+  margin: 4px 0 8px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.09em;
   color: var(--text-3);
   text-transform: uppercase;
 }
@@ -105,33 +105,40 @@ const ROLES: { key: Role; label: string }[] = [
   gap: 10px;
   width: 100%;
   padding: 9px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-md);
   text-align: left;
-  transition: background 0.14s;
+  transition: background 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.nav + .nav {
+  margin-top: 3px;
 }
 
 .nav:hover {
-  background: #f2f5f9;
+  background: var(--panel-soft);
 }
 
 .nav--active {
   background: var(--brand-weak);
+  box-shadow: inset 0 0 0 1px var(--brand-line);
 }
 
 .nav-ico {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex: none;
-  border-radius: 7px;
-  background: #eef1f5;
+  border-radius: 8px;
+  background: var(--panel-tint);
   color: var(--text-2);
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 
 .nav--active .nav-ico {
-  background: var(--brand);
+  background: linear-gradient(150deg, var(--brand-hi), var(--brand));
   color: #fff;
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.35);
 }
 
 .nav-txt {
@@ -139,32 +146,40 @@ const ROLES: { key: Role; label: string }[] = [
   flex-direction: column;
   min-width: 0;
   flex: 1;
+  line-height: 1.35;
 }
 
 .nav-name {
   font-weight: 600;
-  line-height: 1.3;
 }
 
 .nav-sub {
   font-size: 11.5px;
   color: var(--text-3);
-  line-height: 1.4;
 }
 
 .nav--active .nav-sub {
-  color: #6a8bd6;
+  color: #5c7fd0;
 }
 
 .nav-count {
-  font-size: 12px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-tint);
+  color: var(--text-2);
+  font-size: 11.5px;
   font-weight: 700;
-  color: var(--text-3);
+  line-height: 20px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .nav--active .nav-count {
+  background: #fff;
   color: var(--brand);
+  box-shadow: var(--shadow-xs);
 }
 
 .spacer {
@@ -176,17 +191,22 @@ const ROLES: { key: Role; label: string }[] = [
   display: flex;
   gap: 3px;
   padding: 3px;
-  border-radius: 8px;
-  background: #eef1f5;
+  border-radius: 10px;
+  background: var(--panel-tint);
 }
 
 .role-btn {
   flex: 1;
-  height: 26px;
-  border-radius: 6px;
+  height: 27px;
+  border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-2);
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.role-btn:hover {
+  color: var(--text);
 }
 
 .role-btn--on {
@@ -197,7 +217,7 @@ const ROLES: { key: Role; label: string }[] = [
 }
 
 .role-note {
-  margin: 7px 2px 0;
+  margin: 8px 3px 0;
   font-size: 11px;
   color: var(--text-3);
   line-height: 1.5;
@@ -205,7 +225,8 @@ const ROLES: { key: Role; label: string }[] = [
 
 .new-btn {
   justify-content: center;
-  margin-top: 12px;
-  height: 34px;
+  margin-top: 14px;
+  height: 36px;
+  font-weight: 600;
 }
 </style>

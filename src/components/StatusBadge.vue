@@ -24,22 +24,25 @@ const meta = computed(() => statusMeta(props.status))
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex: none;
   border: 1px solid transparent;
   border-radius: 999px;
   font-weight: 600;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .badge--md {
-  height: 23px;
+  height: 24px;
   padding: 0 10px;
   font-size: 12.5px;
 }
 
 .badge--sm {
-  height: 20px;
+  height: 21px;
   padding: 0 8px;
   font-size: 11.5px;
+  gap: 4px;
 }
 
 .dot {
@@ -47,5 +50,10 @@ const meta = computed(() => statusMeta(props.status))
   height: 6px;
   border-radius: 50%;
   flex: none;
+}
+
+.badge--sm .dot {
+  width: 5px;
+  height: 5px;
 }
 </style>

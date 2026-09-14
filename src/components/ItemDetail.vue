@@ -3,7 +3,14 @@ import { computed, ref, watch } from 'vue'
 import StatusBadge from './StatusBadge.vue'
 import AttachmentField from './AttachmentField.vue'
 import CommentThread from './CommentThread.vue'
-import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
+import ImageLightbox from './ImageLightbox.vue'
+import {
+  MAX_ATTACHMENTS_PER_ITEM,
+  MAX_ATTACHMENT_BYTES,
+  STATUS_FLOW,
+  statusMeta,
+  typeMeta,
+} from '@/constants'
 import {
   activeItem,
   attachmentBusy,
@@ -14,8 +21,9 @@ import {
   removeAttachment,
   uploadAttachments,
 } from '@/store/board'
-import { formatDateTime } from '@/utils/format'
-import type { StatusKey } from '@/types'
+import { imageFilesFromClipboard, isImageMime } from '@/utils/clipboard'
+import { formatDateTime, formatSize } from '@/utils/format'
+import type { Attachment, StatusKey } from '@/types'
 
 const editing = ref(false)
 const draftTitle = ref('')
@@ -23,6 +31,9 @@ const draftDesc = ref('')
 const confirmDelete = ref(false)
 const busy = ref(false)
 const localError = ref('')
+const pasteNote = ref('')
+const viewer = ref<Attachment | null>(null)
+const shotInput = ref<HTMLInputElement | null>(null)
 
 watch(
   activeItem,
@@ -30,6 +41,8 @@ watch(
     editing.value = false
     confirmDelete.value = false
     localError.value = ''
+    pasteNote.value = ''
+    viewer.value = null
     clearAttachmentError()
     if (it) {
       draftTitle.value = it.title
@@ -42,6 +55,29 @@ watch(
 const typeName = computed(() => (activeItem.value ? typeMeta(activeItem.value.type).label : ''))
 const shortId = computed(() => activeItem.value?.id.replace(/^item_/, '').slice(0, 6).toUpperCase() ?? '')
 
+/** 描述区展示的图片：附件中的图片部分 */
+const shots = computed(() => (activeItem.value?.attachments ?? []).filter((a) => isImageMime(a.mime)))
+
+/** 上传前的本地校验：数量与单文件大小 */
+function accept(files: File[]): File[] {
+  const it = activeItem.value
+  if (!it) return []
+  const room = MAX_ATTACHMENTS_PER_ITEM - it.attachments.length
+  const out: File[] = []
+  for (const file of files) {
+    if (out.length >= room) {
+      localError.value = `每条最多 ${MAX_ATTACHMENTS_PER_ITEM} 个附件。`
+      break
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      localError.value = `「${file.name}」${formatSize(file.size)}，超过单文件 ${formatSize(MAX_ATTACHMENT_BYTES)} 上限。`
+      continue
+    }
+    out.push(file)
+  }
+  return out
+}
+
 function startEdit(): void {
   const it = activeItem.value
   if (!it) return
@@ -49,11 +85,13 @@ function startEdit(): void {
   draftDesc.value = it.description
   editing.value = true
   localError.value = ''
+  pasteNote.value = ''
 }
 
 function cancelEdit(): void {
   editing.value = false
   localError.value = ''
+  pasteNote.value = ''
 }
 
 async function save(): Promise<void> {
@@ -90,7 +128,39 @@ function onAddFiles(picked: File[]): void {
 function onRemoveAttachment(attachmentId: string): void {
   const it = activeItem.value
   if (!it) return
+  if (viewer.value?.id === attachmentId) viewer.value = null
   void removeAttachment(it.id, attachmentId)
+}
+
+/** 在描述框粘贴截图：拦下图片，走附件通道，随即可在描述下方看到 */
+async function onPasteDesc(event: ClipboardEvent): Promise<void> {
+  const it = activeItem.value
+  if (!it || !editing.value) return
+  const images = imageFilesFromClipboard(event)
+  if (images.length === 0) return
+
+  event.preventDefault()
+  localError.value = ''
+  const files = accept(images)
+  if (files.length === 0) return
+
+  pasteNote.value = `正在上传 ${files.length} 张截图…`
+  await uploadAttachments(it.id, files)
+  pasteNote.value = attachmentError.value ? '' : `已添加 ${files.length} 张截图`
+}
+
+function pickShots(): void {
+  shotInput.value?.click()
+}
+
+function onPickShots(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const picked = Array.from(input.files ?? [])
+  input.value = ''
+  if (picked.length === 0) return
+  localError.value = ''
+  const files = accept(picked)
+  if (files.length > 0) onAddFiles(files)
 }
 
 async function doDelete(): Promise<void> {
@@ -106,15 +176,15 @@ async function doDelete(): Promise<void> {
 <template>
   <section class="detail scroll">
     <div v-if="!activeItem" class="blank">
-      <svg viewBox="0 0 48 48" width="46" height="46">
-        <rect x="7" y="9" width="34" height="30" rx="3" fill="none" stroke="#cbd4df" stroke-width="1.6" />
-        <path d="M14 18h20M14 25h20M14 32h12" stroke="#dbe3ec" stroke-width="1.6" stroke-linecap="round" />
+      <svg viewBox="0 0 48 48" width="48" height="48">
+        <rect x="7" y="9" width="34" height="30" rx="4" fill="#fff" stroke="#d6dee9" stroke-width="1.6" />
+        <path d="M14 18h20M14 25h20M14 32h12" stroke="#dee5ef" stroke-width="1.8" stroke-linecap="round" />
       </svg>
       <p class="blank-t">左侧选一条查看详情</p>
       <p class="blank-s">或点「新建」提出一条新的{{ typeName || '需求' }}</p>
     </div>
 
-    <template v-else>
+    <div v-else class="wrap">
       <!-- 头部 -->
       <header class="head">
         <div class="head-top">
@@ -125,7 +195,18 @@ async function doDelete(): Promise<void> {
 
           <div class="head-acts">
             <template v-if="!editing">
-              <button class="btn btn-sm" @click="startEdit">编辑</button>
+              <button class="btn btn-sm" @click="startEdit">
+                <svg viewBox="0 0 16 16" width="13" height="13">
+                  <path
+                    d="M11.1 2.7 13.3 4.9 5.9 12.3l-2.9.7.7-2.9 7.4-7.4Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.3"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                编辑
+              </button>
               <button
                 v-if="!confirmDelete"
                 class="btn btn-sm btn-danger-ghost"
@@ -159,30 +240,99 @@ async function doDelete(): Promise<void> {
         <div class="meta-row">
           <StatusBadge :status="activeItem.status" />
           <span class="meta-sep" />
-          <span class="meta-time">创建于 {{ formatDateTime(activeItem.createdAt) }}</span>
+          <span class="meta-time">
+            <svg viewBox="0 0 16 16" width="12" height="12">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.3" />
+              <path d="M8 4.6V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+            创建于 {{ formatDateTime(activeItem.createdAt) }}
+          </span>
           <span v-if="activeItem.updatedAt !== activeItem.createdAt" class="meta-time">
-            · 更新于 {{ formatDateTime(activeItem.updatedAt) }}
+            更新于 {{ formatDateTime(activeItem.updatedAt) }}
           </span>
         </div>
       </header>
 
       <!-- 描述 -->
       <section class="block">
-        <h3 class="block-t">描述</h3>
-        <textarea
-          v-if="editing"
-          v-model="draftDesc"
-          class="field desc-input"
-          rows="5"
-          placeholder="写清楚要做什么、验收标准是什么…"
-        />
-        <p v-else-if="activeItem.description" class="desc">{{ activeItem.description }}</p>
-        <p v-else class="desc desc--empty">（无描述）</p>
+        <h3 class="block-t">
+          <span class="block-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13">
+              <path
+                d="M2.8 3.4h10.4M2.8 7h10.4M2.8 10.6h6.6"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          描述
+        </h3>
+
+        <div class="desc-card" :class="{ 'desc-card--edit': editing }">
+          <textarea
+            v-if="editing"
+            v-model="draftDesc"
+            class="desc-input"
+            rows="6"
+            placeholder="写清楚要做什么、验收标准是什么…（可直接粘贴截图）"
+            @paste="onPasteDesc"
+          />
+          <p v-else-if="activeItem.description" class="desc">{{ activeItem.description }}</p>
+          <p v-else class="desc desc--empty">（无描述）</p>
+        </div>
+
+        <div v-if="editing" class="desc-tools">
+          <span class="paste-hint">
+            支持直接粘贴截图
+            <span class="kbd">⌘</span>
+            <span class="kbd">V</span>
+          </span>
+          <button class="btn btn-sm btn-ghost" :disabled="attachmentBusy" @click="pickShots">
+            选择图片…
+          </button>
+          <span v-if="attachmentBusy" class="tool-note tool-note--busy">上传中…</span>
+          <span v-else-if="pasteNote" class="tool-note">{{ pasteNote }}</span>
+        </div>
+
+        <div v-if="shots.length || attachmentBusy" class="shots">
+          <button
+            v-for="s in shots"
+            :key="s.id"
+            class="shot"
+            :title="`${s.name} · 点击看大图`"
+            @click="viewer = s"
+          >
+            <img :src="s.url" :alt="s.name" loading="lazy" />
+            <span class="shot-zoom">
+              <svg viewBox="0 0 16 16" width="13" height="13">
+                <circle cx="7.2" cy="7.2" r="4.2" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="M10.4 10.4 13.6 13.6M7.2 5.4v3.6M5.4 7.2h3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+              </svg>
+            </span>
+          </button>
+          <span v-if="attachmentBusy" class="shot shot--skel" />
+        </div>
+
+        <input ref="shotInput" type="file" accept="image/*" multiple class="hidden-input" @change="onPickShots" />
+
+        <p v-if="localError" class="err">{{ localError }}</p>
       </section>
 
       <!-- 附件 -->
       <section class="block">
         <h3 class="block-t">
+          <span class="block-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13">
+              <path
+                d="M10.6 5.1 6 9.7a1.3 1.3 0 0 0 1.8 1.8l4.6-4.6a2.7 2.7 0 0 0-3.8-3.8L3.7 7.3a4 4 0 0 0 5.7 5.7l4-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.35"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
           附件
           <span v-if="activeItem.attachments.length" class="block-n">{{ activeItem.attachments.length }}</span>
         </h3>
@@ -192,13 +342,21 @@ async function doDelete(): Promise<void> {
           :server-error="attachmentError"
           @add="onAddFiles"
           @remove="onRemoveAttachment"
+          @preview="viewer = $event"
         />
-        <p v-if="localError" class="err">{{ localError }}</p>
       </section>
 
-      <!-- 状态流转 -->
+      <!-- 状态 -->
       <section class="block">
-        <h3 class="block-t">状态</h3>
+        <h3 class="block-t">
+          <span class="block-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13">
+              <path d="M4 13.4V2.9h7.6l-1.3 2.4 1.3 2.4H4" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" />
+            </svg>
+          </span>
+          状态
+          <span class="block-note">{{ statusMeta(activeItem.status).hint }}</span>
+        </h3>
         <div class="flow">
           <button
             v-for="s in STATUS_FLOW"
@@ -217,18 +375,35 @@ async function doDelete(): Promise<void> {
             {{ s.label }}
           </button>
         </div>
-        <p class="flow-hint">{{ statusMeta(activeItem.status).hint }}</p>
       </section>
 
-      <!-- 评论区 -->
+      <!-- 完成情况 -->
       <section class="block block--last">
         <h3 class="block-t">
+          <span class="block-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13">
+              <path
+                d="M13.4 8.6a4.9 4.9 0 0 1-5.3 4.9L4.2 14.3l.9-3a4.9 4.9 0 1 1 8.3-2.7Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.35"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
           完成情况
           <span v-if="activeItem.comments.length" class="block-n">{{ activeItem.comments.length }}</span>
         </h3>
         <CommentThread :item-id="activeItem.id" :comments="activeItem.comments" />
       </section>
-    </template>
+    </div>
+
+    <ImageLightbox
+      v-if="viewer"
+      :src="viewer.url"
+      :name="viewer.name"
+      @close="viewer = null"
+    />
   </section>
 </template>
 
@@ -236,22 +411,29 @@ async function doDelete(): Promise<void> {
 .detail {
   flex: 1;
   min-width: 0;
-  padding: 20px 26px 40px;
+  background: var(--panel);
 }
 
-/* 空态 */
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 30px 60px;
+}
+
+/* ---------- 空态 ---------- */
 .blank {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   height: 100%;
+  padding: 40px;
   color: var(--text-3);
 }
 
 .blank-t {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-2);
@@ -259,12 +441,12 @@ async function doDelete(): Promise<void> {
 
 .blank-s {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
-/* 头部 */
+/* ---------- 头部 ---------- */
 .head {
-  padding-bottom: 17px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -274,7 +456,7 @@ async function doDelete(): Promise<void> {
   justify-content: space-between;
   gap: 12px;
   min-height: 30px;
-  margin-bottom: 9px;
+  margin-bottom: 10px;
 }
 
 .crumb {
@@ -285,9 +467,9 @@ async function doDelete(): Promise<void> {
 }
 
 .crumb-type {
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: #eef1f5;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--panel-tint);
   color: var(--text-2);
   font-weight: 600;
 }
@@ -295,7 +477,7 @@ async function doDelete(): Promise<void> {
 .crumb-id {
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 
 .head-acts {
@@ -311,25 +493,26 @@ async function doDelete(): Promise<void> {
 }
 
 .title {
-  margin: 0 0 11px;
-  font-size: 22px;
+  margin: 0 0 12px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 1.42;
-  letter-spacing: -0.01em;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
   word-break: break-word;
 }
 
 .title-input {
-  margin-bottom: 11px;
+  margin-bottom: 12px;
+  padding: 10px 13px;
   font-size: 19px;
   font-weight: 600;
-  padding: 9px 12px;
+  letter-spacing: -0.01em;
 }
 
 .meta-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -340,48 +523,85 @@ async function doDelete(): Promise<void> {
 }
 
 .meta-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12.5px;
   color: var(--text-3);
 }
 
-/* 区块 */
+/* ---------- 区块 ---------- */
 .block {
-  padding: 19px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .block--last {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .block-t {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 11px;
-  font-size: 13px;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13.5px;
   font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+
+.block-ico {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--panel-tint);
   color: var(--text-2);
-  letter-spacing: 0.01em;
 }
 
 .block-n {
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: #eef1f5;
-  color: var(--text-2);
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--brand-weak);
+  color: var(--brand);
   font-size: 11px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-note {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* ---------- 描述 ---------- */
+.desc-card {
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-inset);
+}
+
+.desc-card--edit {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
 .desc {
   margin: 0;
   font-size: 14px;
-  line-height: 1.78;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -391,13 +611,132 @@ async function doDelete(): Promise<void> {
 }
 
 .desc-input {
-  line-height: 1.7;
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: #fff;
+  line-height: 1.75;
+  outline: none;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
 
-/* 状态流转 */
+.desc-input:hover {
+  border-color: #c2cbd9;
+}
+
+.desc-input:focus {
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+
+.desc-input::placeholder {
+  color: var(--text-3);
+}
+
+.desc-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+
+.paste-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.tool-note {
+  font-size: 12px;
+  color: #047857;
+  font-weight: 600;
+}
+
+.tool-note--busy {
+  color: var(--brand);
+}
+
+/* ---------- 截图预览 ---------- */
+.shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.shot {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-inset);
+  overflow: hidden;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
+}
+
+.shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.shot:hover {
+  border-color: var(--brand-line);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.shot-zoom {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+
+.shot:hover .shot-zoom {
+  opacity: 1;
+}
+
+.shot--skel {
+  background: linear-gradient(100deg, #f1f5f9 30%, #e7edf5 50%, #f1f5f9 70%);
+  background-size: 220% 100%;
+  animation: skel 1.1s linear infinite;
+}
+
+@keyframes skel {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+.hidden-input {
+  display: none;
+}
+
+/* ---------- 状态流转 ---------- */
 .flow {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -405,27 +744,30 @@ async function doDelete(): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 31px;
-  padding: 0 12px;
+  height: 33px;
+  padding: 0 13px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: #fff;
   font-size: 13px;
   color: var(--text-2);
-  transition: all 0.14s;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease), transform 0.1s var(--ease);
 }
 
 .flow-btn:hover:not(:disabled) {
-  border-color: #bcc6d2;
-  background: #f8fafb;
+  border-color: #b9c4d3;
+  background: var(--panel-soft);
+  transform: translateY(-1px);
 }
 
 .flow-btn--on {
   font-weight: 700;
+  box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .flow-btn--on:hover {
-  background: inherit;
+  transform: none;
 }
 
 .flow-btn:disabled {
@@ -440,21 +782,9 @@ async function doDelete(): Promise<void> {
   flex: none;
 }
 
-.flow-hint {
-  margin: 9px 0 0;
-  font-size: 12.5px;
-  color: var(--text-3);
-}
-
-.err {
-  margin: 9px 0 0;
-  font-size: 12px;
-  color: var(--danger);
-}
-
 @media (max-width: 1180px) {
-  .detail {
-    padding: 18px 20px 36px;
+  .wrap {
+    padding: 20px 22px 52px;
   }
 }
 </style>
