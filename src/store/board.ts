@@ -122,6 +122,7 @@ export async function createItem(draft: ItemDraft, files: File[] = []): Promise<
     activeType.value = created.type
     statusFilter.value = 'all'
     activeId.value = created.id
+    exitPick()
     if (files.length > 0) await uploadAttachments(created.id, files)
     return items.value.find((it) => it.id === created.id) ?? created
   } catch (err) {
@@ -205,6 +206,8 @@ export function selectType(type: ItemType): void {
   activeType.value = type
   statusFilter.value = 'all'
   activeId.value = visibleItems.value[0]?.id ?? ''
+  // 显式清空选择：切换分类后旧选中项已不可见，留着容易误删
+  exitPick()
 }
 
 export function selectStatus(status: StatusKey | 'all'): void {
@@ -212,4 +215,71 @@ export function selectStatus(status: StatusKey | 'all'): void {
   if (!visibleItems.value.some((it) => it.id === activeId.value)) {
     activeId.value = visibleItems.value[0]?.id ?? ''
   }
+}
+
+/* ---------- 批量选择 ---------- */
+
+/** 是否处于批量选择模式 */
+export const picking = ref(false)
+/** 已勾选的条目 id */
+export const picked = ref<string[]>([])
+
+/** 只认当前可见（当前分类 + 当前筛选）中被勾选的条目，避免删掉看不见的 */
+export const pickedItems = computed(() =>
+  visibleItems.value.filter((it) => picked.value.includes(it.id)),
+)
+
+/** 当前可见条目是否已全选 */
+export const allPicked = computed(
+  () => visibleItems.value.length > 0 && pickedItems.value.length === visibleItems.value.length,
+)
+
+export function startPick(): void {
+  picking.value = true
+  picked.value = []
+}
+
+export function exitPick(): void {
+  picking.value = false
+  picked.value = []
+}
+
+export function togglePick(id: string): void {
+  picked.value = picked.value.includes(id)
+    ? picked.value.filter((x) => x !== id)
+    : [...picked.value, id]
+}
+
+export function togglePickAll(): void {
+  picked.value = allPicked.value ? [] : visibleItems.value.map((it) => it.id)
+}
+
+/* ---------- 批量删除 ---------- */
+
+/**
+ * 批量删除。逐个调用删除接口，逐个更新本地列表，失败的汇总后提示。
+ * 不新增后端接口：循环复用已有的 DELETE /api/items/:id。
+ */
+export async function deleteItems(ids: string[]): Promise<{ ok: number; failed: string[] }> {
+  if (ids.length === 0) return { ok: 0, failed: [] }
+  errorMessage.value = ''
+  const failed: string[] = []
+  let ok = 0
+  for (const id of ids) {
+    try {
+      await api.remove(id)
+      items.value = items.value.filter((it) => it.id !== id)
+      ok += 1
+    } catch {
+      failed.push(id)
+    }
+  }
+  if (failed.length > 0) {
+    errorMessage.value = `有 ${failed.length} 条删除失败，请重试。`
+  }
+  if (activeId.value && !items.value.some((it) => it.id === activeId.value)) {
+    activeId.value = visibleItems.value[0]?.id ?? ''
+  }
+  exitPick()
+  return { ok, failed }
 }
