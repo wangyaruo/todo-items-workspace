@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AttachmentField from './AttachmentField.vue'
-import { ITEM_TYPES, STATUS_FLOW } from '@/constants'
+import { ALL_PORTS_META, ITEM_TYPES, PORT_OPTIONS, STATUS_FLOW } from '@/constants'
 import { activeType, composerOpen, createItem } from '@/store/board'
 import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard } from '@/utils/clipboard'
-import type { Attachment, ItemType, StatusKey } from '@/types'
+import type { Attachment, ItemType, PortKey, StatusKey } from '@/types'
+
+/** 初始状态可选值：不含「已归档」（归档是后续流转动作，不是初始态） */
+const INITIAL_STATUSES = STATUS_FLOW.filter((s) => s.key !== 'archived')
 
 const type = ref<ItemType>('requirement')
 const title = ref('')
 const description = ref('')
 const status = ref<StatusKey>('pending')
+/** 适用端口，多选，必填；默认不选 */
+const ports = ref<PortKey[]>([])
 const busy = ref(false)
 const err = ref('')
 const pasteNote = ref('')
@@ -20,6 +25,19 @@ const files = ref<File[]>([])
 const previews = ref<Attachment[]>([])
 
 const currentLabel = computed(() => ITEM_TYPES.find((t) => t.key === type.value)?.label ?? '需求')
+
+/** 「全部」= 8080 和 8318 都选中 */
+const allPorts = computed(() => ports.value.length === PORT_OPTIONS.length)
+
+function togglePort(key: PortKey): void {
+  ports.value = ports.value.includes(key)
+    ? ports.value.filter((p) => p !== key)
+    : [...ports.value, key]
+}
+
+function toggleAllPorts(): void {
+  ports.value = allPorts.value ? [] : PORT_OPTIONS.map((p) => p.key)
+}
 
 function releaseAll(): void {
   for (const p of previews.value) URL.revokeObjectURL(p.url)
@@ -33,6 +51,7 @@ watch(composerOpen, (open) => {
   title.value = ''
   description.value = ''
   status.value = 'pending'
+  ports.value = []
   err.value = ''
   pasteNote.value = ''
   busy.value = false
@@ -92,6 +111,10 @@ async function submit(): Promise<void> {
     err.value = '请填写标题。'
     return
   }
+  if (ports.value.length === 0) {
+    err.value = '请选择适用端口（8080 / 8318 / 全部 至少选一项）。'
+    return
+  }
   busy.value = true
   err.value = ''
   pasteNote.value = ''
@@ -102,6 +125,7 @@ async function submit(): Promise<void> {
       title: title.value.trim(),
       description: description.value.trim(),
       status: status.value,
+      ports: [...ports.value],
     },
     files.value,
   )
@@ -160,6 +184,33 @@ async function submit(): Promise<void> {
         </div>
 
         <div class="grp">
+          <span class="label">适用端口</span>
+          <div class="segs">
+            <button
+              v-for="p in PORT_OPTIONS"
+              :key="p.key"
+              class="seg"
+              :class="{ 'seg--on': ports.includes(p.key) }"
+              :style="ports.includes(p.key) ? { color: p.color, borderColor: p.border, background: p.bg } : {}"
+              @click="togglePort(p.key)"
+            >
+              <i class="seg-dot" :style="{ background: p.color }" />
+              {{ p.label }}
+            </button>
+            <button
+              class="seg"
+              :class="{ 'seg--on': allPorts }"
+              :style="allPorts ? { color: ALL_PORTS_META.color, borderColor: ALL_PORTS_META.border, background: ALL_PORTS_META.bg } : {}"
+              @click="toggleAllPorts"
+            >
+              <i class="seg-dot" :style="{ background: ALL_PORTS_META.color }" />
+              {{ ALL_PORTS_META.label }}
+            </button>
+          </div>
+          <span class="port-hint">必选，可多选；「全部」即同时选择 8080 与 8318</span>
+        </div>
+
+        <div class="grp">
           <label class="label" for="cmp-title">标题</label>
           <input
             id="cmp-title"
@@ -199,7 +250,7 @@ async function submit(): Promise<void> {
           <span class="label">初始状态</span>
           <div class="segs segs--wrap">
             <button
-              v-for="s in STATUS_FLOW"
+              v-for="s in INITIAL_STATUSES"
               :key="s.key"
               class="seg"
               :class="{ 'seg--on': status === s.key }"
@@ -219,7 +270,11 @@ async function submit(): Promise<void> {
         <span class="foot-hint">创建后可随时补充描述与附件</span>
         <span class="foot-acts">
           <button class="btn btn-ghost" :disabled="busy" @click="close">取消</button>
-          <button class="btn btn-primary" :disabled="busy || !title.trim()" @click="submit">
+          <button
+            class="btn btn-primary"
+            :disabled="busy || !title.trim() || ports.length === 0"
+            @click="submit"
+          >
             {{ busy ? '保存中…' : '创建' }}
           </button>
         </span>

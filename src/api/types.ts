@@ -1,4 +1,4 @@
-import type { Item, ItemDraft, ItemType, Role, StatusKey } from '@/types'
+import type { Item, ItemDraft, ItemType, PortKey, Role, StatusKey } from '@/types'
 
 /** 可局部更新的字段 */
 export interface ItemPatch {
@@ -6,6 +6,7 @@ export interface ItemPatch {
   title?: string
   description?: string
   status?: StatusKey
+  ports?: PortKey[]
 }
 
 export interface NewComment {

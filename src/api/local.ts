@@ -1,4 +1,4 @@
-import type { Attachment, Item, ItemDraft } from '@/types'
+import type { Attachment, Item, ItemDraft, PortKey } from '@/types'
 import { uid } from '@/utils/format'
 import type { BoardApi, NewComment } from './types'
 
@@ -14,7 +14,9 @@ function readAll(): Item[] {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as Item[]) : []
+    if (!Array.isArray(parsed)) return []
+    // 兼容旧数据：没有 ports 字段的条目补空数组
+    return (parsed as Item[]).map((it) => ({ ...it, ports: (it.ports ?? []) as PortKey[] }))
   } catch {
     return []
   }
@@ -60,6 +62,7 @@ export const localApi: BoardApi = {
       title: draft.title,
       description: draft.description,
       status: draft.status,
+      ports: [...draft.ports],
       attachments: [],
       comments: [],
       createdAt: now,

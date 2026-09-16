@@ -1,4 +1,4 @@
-import type { ItemType, Role, StatusKey } from './types'
+import type { ItemType, PortKey, Role, StatusKey } from './types'
 
 export interface TypeMeta {
   key: ItemType
@@ -69,6 +69,14 @@ export const STATUS_FLOW: StatusMeta[] = [
     border: '#f7c9c9',
     hint: '验收未通过，需要返工',
   },
+  {
+    key: 'archived',
+    label: '已归档',
+    color: '#475569',
+    bg: '#f1f5f9',
+    border: '#d8e0ea',
+    hint: '已归档，在左侧对应已归档清单里展示',
+  },
 ]
 
 export function statusMeta(key: StatusKey): StatusMeta {
@@ -78,6 +86,36 @@ export function statusMeta(key: StatusKey): StatusMeta {
 export const ROLE_LABEL: Record<Role, string> = {
   product: '产品',
   developer: '开发',
+}
+
+/** 适用端口的展示元信息 */
+export interface PortMeta {
+  key: PortKey
+  label: string
+  /** 主色 */
+  color: string
+  /** 浅底色 */
+  bg: string
+  /** 边框色 */
+  border: string
+}
+
+export const PORT_OPTIONS: PortMeta[] = [
+  { key: '8080', label: '8080', color: '#1d4ed8', bg: '#eff6ff', border: '#c7d9fb' },
+  { key: '8318', label: '8318', color: '#0f766e', bg: '#f0fdfa', border: '#c2e9e2' },
+]
+
+/** 「全部」按钮（= 两个端口都选）的配色 */
+export const ALL_PORTS_META = {
+  key: 'all',
+  label: '全部',
+  color: '#b45309',
+  bg: '#fffbeb',
+  border: '#fbe4b8',
+}
+
+export function portMeta(key: string): PortMeta | undefined {
+  return PORT_OPTIONS.find((p) => p.key === key)
 }
 
 /** 单文件大小上限（与后端 MAX_UPLOAD_BYTES 保持一致） */

@@ -4,7 +4,7 @@ import StatusBadge from './StatusBadge.vue'
 import AttachmentField from './AttachmentField.vue'
 import CommentThread from './CommentThread.vue'
 import ImageLightbox from './ImageLightbox.vue'
-import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
+import { ALL_PORTS_META, PORT_OPTIONS, STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
 import {
   activeItem,
   attachmentBusy,
@@ -18,11 +18,12 @@ import {
 import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard, isImageMime } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/format'
-import type { Attachment, StatusKey } from '@/types'
+import type { Attachment, PortKey, StatusKey } from '@/types'
 
 const editing = ref(false)
 const draftTitle = ref('')
 const draftDesc = ref('')
+const draftPorts = ref<PortKey[]>([])
 const confirmDelete = ref(false)
 const busy = ref(false)
 const localError = ref('')
@@ -42,6 +43,7 @@ watch(
     if (it) {
       draftTitle.value = it.title
       draftDesc.value = it.description
+      draftPorts.value = [...it.ports]
     }
   },
   { immediate: true },
@@ -53,11 +55,33 @@ const shortId = computed(() => activeItem.value?.id.replace(/^item_/, '').slice(
 /** 描述区展示的图片：附件中的图片部分 */
 const shots = computed(() => (activeItem.value?.attachments ?? []).filter((a) => isImageMime(a.mime)))
 
+/** 适用端口标签（逐个显示，便于辨认；「全部」= 两个标签都亮） */
+const portTags = computed(() => {
+  const ports = activeItem.value?.ports ?? []
+  return ports
+    .map((k) => PORT_OPTIONS.find((p) => p.key === k))
+    .filter((p): p is (typeof PORT_OPTIONS)[number] => Boolean(p))
+})
+
+/** 编辑态：「全部」= 8080 和 8318 都选中 */
+const draftAllPorts = computed(() => draftPorts.value.length === PORT_OPTIONS.length)
+
+function togglePort(key: PortKey): void {
+  draftPorts.value = draftPorts.value.includes(key)
+    ? draftPorts.value.filter((p) => p !== key)
+    : [...draftPorts.value, key]
+}
+
+function toggleAllPorts(): void {
+  draftPorts.value = draftAllPorts.value ? [] : PORT_OPTIONS.map((p) => p.key)
+}
+
 function startEdit(): void {
   const it = activeItem.value
   if (!it) return
   draftTitle.value = it.title
   draftDesc.value = it.description
+  draftPorts.value = [...it.ports]
   editing.value = true
   localError.value = ''
   pasteNote.value = ''
@@ -77,10 +101,15 @@ async function save(): Promise<void> {
     localError.value = '标题不能为空。'
     return
   }
+  if (draftPorts.value.length === 0) {
+    localError.value = '请选择适用端口（8080 / 8318 / 全部 至少选一项）。'
+    return
+  }
   busy.value = true
   await patchItem(it.id, {
     title,
     description: draftDesc.value.trim(),
+    ports: [...draftPorts.value],
   })
   busy.value = false
   editing.value = false
@@ -323,6 +352,56 @@ async function doDelete(): Promise<void> {
         />
       </section>
 
+      <!-- 适用端口 -->
+      <section class="block">
+        <h3 class="block-t">
+          <span class="block-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13">
+              <rect x="2.6" y="3.2" width="10.8" height="9.6" rx="2" fill="none" stroke="currentColor" stroke-width="1.35" />
+              <circle cx="5.4" cy="6.2" r="0.9" fill="currentColor" />
+              <circle cx="5.4" cy="9.8" r="0.9" fill="currentColor" />
+              <path d="M8 6.2h3.2M8 9.8h3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+            </svg>
+          </span>
+          适用端口
+        </h3>
+
+        <div v-if="editing" class="segs">
+          <button
+            v-for="p in PORT_OPTIONS"
+            :key="p.key"
+            class="seg"
+            :class="{ 'seg--on': draftPorts.includes(p.key) }"
+            :style="draftPorts.includes(p.key) ? { color: p.color, borderColor: p.border, background: p.bg } : {}"
+            @click="togglePort(p.key)"
+          >
+            <i class="seg-dot" :style="{ background: p.color }" />
+            {{ p.label }}
+          </button>
+          <button
+            class="seg"
+            :class="{ 'seg--on': draftAllPorts }"
+            :style="draftAllPorts ? { color: ALL_PORTS_META.color, borderColor: ALL_PORTS_META.border, background: ALL_PORTS_META.bg } : {}"
+            @click="toggleAllPorts"
+          >
+            <i class="seg-dot" :style="{ background: ALL_PORTS_META.color }" />
+            {{ ALL_PORTS_META.label }}
+          </button>
+        </div>
+
+        <div v-else class="port-view">
+          <span
+            v-for="p in portTags"
+            :key="p.key"
+            class="port-tag port-tag--lg"
+            :style="{ color: p.color, background: p.bg, borderColor: p.border }"
+          >
+            {{ p.label }}
+          </span>
+          <span v-if="!portTags.length" class="port-empty">（未指定）</span>
+        </div>
+      </section>
+
       <!-- 状态 -->
       <section class="block">
         <h3 class="block-t">
@@ -486,6 +565,47 @@ async function doDelete(): Promise<void> {
   letter-spacing: -0.01em;
 }
 
+/* ---------- 适用端口 ---------- */
+.segs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: #fff;
+  font-size: 13px;
+  color: var(--text-2);
+  box-shadow: var(--shadow-xs);
+  transition: all 0.15s var(--ease);
+}
+
+.seg:hover {
+  border-color: #b9c4d3;
+  background: var(--panel-soft);
+}
+
+.seg--on {
+  border-color: #1f2937;
+  background: #1f2937;
+  color: #fff;
+  font-weight: 600;
+}
+
+.seg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
 .meta-row {
   display: flex;
   align-items: center;
@@ -504,6 +624,38 @@ async function doDelete(): Promise<void> {
   align-items: center;
   gap: 4px;
   font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.port-view {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.port-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.port-tag--lg {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.port-empty {
+  font-size: 13px;
   color: var(--text-3);
 }
 

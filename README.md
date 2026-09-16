@@ -10,7 +10,7 @@
 | 中栏 | 条目列表，顶部为状态筛选下拉；卡片左侧色条对应当前状态 |
 | 右栏 | 详情：标题、描述、附件、创建与更新时间、状态切换、完成情况评论区 |
 
-状态流转：待处理 → 开发中 → 待验证 → 验证通过；验收不通过回到「重新处理」。
+状态流转：待处理 → 开发中 → 待验证 → 验证通过；验收不通过回到「重新处理」；另有「已归档」——归档条目从主列表隐藏，归入左侧对应「已归档需求 / 已归档缺陷」清单，状态改回即恢复原列表可见。
 
 ## 按状态筛选
 
@@ -19,6 +19,21 @@
 - 键盘：`↑` `↓` 移动高亮，`Enter` / `空格` 选中，`Esc` 收起
 - 点击面板以外的区域自动收起
 - 筛选只作用于当前分类（需求 / 缺陷），切换分类会重置为「全部」
+- 归档视图不显示状态筛选（该视图内状态恒为已归档）
+
+## 按适用端口筛选
+
+状态筛选旁还有一个多选下拉（`src/components/PortFilter.vue`）：勾选 8080 / 8318 后只显示含对应端口的条目（任一匹配，双端口条目在两个选项下都会出现）：
+
+- 全不勾 = 不筛选；收起时显示「全部端口」及当前匹配条数
+- 勾选逻辑为多选，点选项不关闭面板，键盘 `↑` `↓` 移动、`Enter` / `空格` 切换勾选、`Esc` 收起
+- 主列表与归档视图都生效；切换分类 / 归档视图 / 新建条目后会重置为不筛选
+
+## 适用端口
+
+新建需求 / 缺陷时选择该条适用于哪个端口：`8080`、`8318` 可多选，「全部」是同时选中两者的快捷按钮。
+选中态用不同颜色区分（蓝 / 青 / 琥珀），列表卡片与详情页头部都会显示对应的端口小标签。
+数据存 `items.ports` 列（逗号分隔）；旧库执行 `npm run init-db` 会自动补列，旧数据视为未指定。
 
 ## 删除条目
 
@@ -191,7 +206,7 @@ location / {
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/items` | 列表，可带 `?type=requirement\|defect` |
-| POST | `/api/items` | 新建，body：`type` `title` `description` `status` |
+| POST | `/api/items` | 新建，body：`type` `title` `description` `status` `ports`（端口数组，如 `["8080","8318"]`） |
 | PATCH | `/api/items/:id` | 局部更新，body 同上任选 |
 | DELETE | `/api/items/:id` | 删除，级联清理评论与磁盘附件 |
 | POST | `/api/items/:id/comments` | 添加评论，body：`author` `role` `body` |
@@ -205,7 +220,7 @@ location / {
 
 | 表 | 用途 | 关键字段 |
 |---|---|---|
-| `items` | 一条需求 / 缺陷 | `type` `title` `description` `status` `created_at` `updated_at` |
+| `items` | 一条需求 / 缺陷 | `type` `title` `description` `status` `ports`（适用端口，逗号分隔）`created_at` `updated_at` |
 | `attachments` | 附件 | `item_id` `name` `size` `mime` `url` |
 | `comments` | 完成情况 | `item_id` `author` `role` `body` |
 

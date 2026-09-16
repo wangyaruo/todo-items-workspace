@@ -2,16 +2,20 @@
 import { computed, ref } from 'vue'
 import StatusBadge from './StatusBadge.vue'
 import StatusFilter from './StatusFilter.vue'
-import { STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
+import PortFilter from './PortFilter.vue'
+import { PORT_OPTIONS, STATUS_FLOW, statusMeta, typeMeta } from '@/constants'
 import {
   activeId,
   activeType,
   allPicked,
+  archivedView,
   composerOpen,
   deleteItems,
   exitPick,
   pickedItems,
   picking,
+  portCounts,
+  portFilter,
   startPick,
   statusCounts,
   statusFilter,
@@ -23,17 +27,32 @@ import {
 import { relativeTime } from '@/utils/format'
 import type { StatusKey } from '@/types'
 
-const heading = computed(() => typeMeta(activeType.value).label)
+const heading = computed(() =>
+  archivedView.value ? `已归档${typeMeta(activeType.value).label}` : typeMeta(activeType.value).label,
+)
 
 const filters = computed(() => [
   { key: 'all' as const, label: '全部', count: statusCounts.value.all, color: '#1f2937' },
-  ...STATUS_FLOW.map((s) => ({
+  ...STATUS_FLOW.filter((s) => s.key !== 'archived').map((s) => ({
     key: s.key as StatusKey,
     label: s.label,
     count: statusCounts.value[s.key] ?? 0,
     color: s.color,
   })),
 ])
+
+/** 端口筛选下拉的选项（计数 = 当前范围内含该端口的条目数） */
+const portOptions = computed(() =>
+  PORT_OPTIONS.map((p) => ({
+    key: p.key,
+    label: p.label,
+    color: p.color,
+    count: portCounts.value[p.key] ?? 0,
+  })),
+)
+
+/** 当前选中端口下匹配到的条目数（任一匹配，避免双端口条目被重复计数） */
+const portMatchedCount = computed(() => visibleItems.value.length)
 
 /** 批量删除的二次确认 */
 const confirming = ref(false)
@@ -92,6 +111,13 @@ function excerpt(text: string): string {
   const t = text.replace(/\s+/g, ' ').trim()
   return t.length > 58 ? `${t.slice(0, 58)}…` : t || '（无描述）'
 }
+
+/** 卡片上的端口小标签 */
+function portTags(ports: string[] | undefined) {
+  return (ports ?? [])
+    .map((k) => PORT_OPTIONS.find((p) => p.key === k))
+    .filter((p): p is (typeof PORT_OPTIONS)[number] => Boolean(p))
+}
 </script>
 
 <template>
@@ -99,7 +125,9 @@ function excerpt(text: string): string {
     <div class="list-head">
       <div class="head-txt">
         <h2>{{ heading }}</h2>
-        <span class="head-n">{{ visibleItems.length }} / {{ statusCounts.all }}</span>
+        <span class="head-n">
+          {{ archivedView ? visibleItems.length : `${visibleItems.length} / ${statusCounts.all}` }}
+        </span>
       </div>
       <div class="head-acts">
         <button
@@ -131,7 +159,13 @@ function excerpt(text: string): string {
     </div>
 
     <div class="filter-bar">
-      <StatusFilter :model-value="statusFilter" :options="filters" @update:model-value="selectStatus" />
+      <StatusFilter
+        v-if="!archivedView"
+        :model-value="statusFilter"
+        :options="filters"
+        @update:model-value="selectStatus"
+      />
+      <PortFilter v-model="portFilter" :options="portOptions" :matched-count="portMatchedCount" />
     </div>
 
     <div v-if="picking" class="bulkbar" :class="{ 'bulkbar--danger': confirming }">
@@ -173,9 +207,25 @@ function excerpt(text: string): string {
           <path d="M30 27.2v5.6M27.2 30h5.6" stroke="#b9c4d4" stroke-width="1.5" stroke-linecap="round" />
         </svg>
         <p class="empty-t">
-          {{ statusFilter === 'all' ? `还没有${heading}` : '这个状态下没有条目' }}
+          {{
+            archivedView
+              ? `还没有已归档的${typeMeta(activeType).label}`
+              : portFilter.length > 0
+                ? '选中的端口下没有条目'
+                : statusFilter === 'all'
+                  ? `还没有${heading}`
+                  : '这个状态下没有条目'
+          }}
         </p>
-        <p class="empty-s">点上方「新建」写一条</p>
+        <p class="empty-s">
+          {{
+            archivedView
+              ? '详情页把状态改为「已归档」后会出现在这里'
+              : portFilter.length > 0
+                ? '换个端口组合试试，或取消勾选查看全部'
+                : '点上方「新建」写一条'
+          }}
+        </p>
       </div>
 
       <div
@@ -226,6 +276,16 @@ function excerpt(text: string): string {
 
           <div class="card-foot">
             <span class="metas">
+              <span v-if="portTags(it.ports).length" class="port-tags">
+                <span
+                  v-for="p in portTags(it.ports)"
+                  :key="p.key"
+                  class="port-tag"
+                  :style="{ color: p.color, background: p.bg, borderColor: p.border }"
+                >
+                  {{ p.label }}
+                </span>
+              </span>
               <span v-if="it.attachments.length" class="meta" title="附件">
                 <svg viewBox="0 0 16 16" width="12" height="12">
                   <path
@@ -331,6 +391,7 @@ function excerpt(text: string): string {
   z-index: 5;
   display: flex;
   align-items: center;
+  gap: 8px;
   flex: none;
   padding: 10px 12px;
   background: var(--panel);
@@ -623,6 +684,24 @@ function excerpt(text: string): string {
   align-items: center;
   gap: 3px;
   font-variant-numeric: tabular-nums;
+}
+
+.port-tags {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.port-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .time {

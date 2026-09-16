@@ -1,6 +1,9 @@
 /** 条目类型：需求 / 缺陷 */
 export type ItemType = 'requirement' | 'defect'
 
+/** 适用端口的合法取值 */
+export type PortKey = '8080' | '8318'
+
 /** 状态标签流转 */
 export type StatusKey =
   | 'pending' // 待处理
@@ -8,6 +11,7 @@ export type StatusKey =
   | 'verifying' // 待验证
   | 'passed' // 验证通过
   | 'rework' // 重新处理
+  | 'archived' // 已归档（移入左侧对应已归档清单，可从主列表改回）
 
 /** 附件。本地模式为内联 base64；接入后端后为 /uploads/xxx 访问路径 */
 export interface Attachment {
@@ -35,6 +39,8 @@ export interface Item {
   title: string
   description: string
   status: StatusKey
+  /** 适用端口，取值 '8080' / '8318'，可多选；空数组表示未指定 */
+  ports: PortKey[]
   attachments: Attachment[]
   comments: Comment[]
   createdAt: string
@@ -47,6 +53,7 @@ export interface ItemDraft {
   title: string
   description: string
   status: StatusKey
+  ports: PortKey[]
 }
 
 /** 当前操作人身份（仅用于署名与默认视角，不做权限隔离） */

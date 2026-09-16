@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { ITEM_TYPES, ROLE_LABEL } from '@/constants'
-import { activeType, currentRole, composerOpen, selectType, setRole, typeCounts } from '@/store/board'
+import {
+  activeType,
+  archivedCounts,
+  archivedView,
+  currentRole,
+  composerOpen,
+  selectArchived,
+  selectType,
+  setRole,
+  typeCounts,
+} from '@/store/board'
 import type { Role } from '@/types'
 
 /** 选项与称呼都来自 ROLE_LABEL，角色文案只在那处定义一次 */
@@ -15,7 +25,7 @@ const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: RO
       v-for="t in ITEM_TYPES"
       :key="t.key"
       class="nav"
-      :class="{ 'nav--active': activeType === t.key }"
+      :class="{ 'nav--active': activeType === t.key && !archivedView }"
       @click="selectType(t.key)"
     >
       <span class="nav-ico">
@@ -48,6 +58,37 @@ const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: RO
       </span>
 
       <span class="nav-count">{{ typeCounts[t.key].total }}</span>
+    </button>
+
+    <div class="group-title group-title--archive">已归档</div>
+
+    <button
+      v-for="t in ITEM_TYPES"
+      :key="t.key"
+      class="nav"
+      :class="{ 'nav--active': archivedView === t.key }"
+      @click="selectArchived(t.key)"
+    >
+      <span class="nav-ico">
+        <svg viewBox="0 0 16 16" width="15" height="15">
+          <rect x="2.2" y="4.9" width="11.6" height="8.2" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <path
+            d="M2.6 4.9 3.9 2.9h8.2l1.3 2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.3"
+            stroke-linejoin="round"
+          />
+          <path d="M6.3 8.2h3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+      </span>
+
+      <span class="nav-txt">
+        <span class="nav-name">已归档{{ t.label }}</span>
+        <span class="nav-sub">{{ archivedCounts[t.key] }} 条</span>
+      </span>
+
+      <span class="nav-count">{{ archivedCounts[t.key] }}</span>
     </button>
 
     <div class="spacer" />
@@ -95,6 +136,10 @@ const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: RO
   letter-spacing: 0.09em;
   color: var(--text-3);
   text-transform: uppercase;
+}
+
+.group-title--archive {
+  margin-top: 16px;
 }
 
 .nav {

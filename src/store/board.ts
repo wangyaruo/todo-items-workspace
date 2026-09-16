@@ -1,14 +1,18 @@
 import { computed, ref } from 'vue'
 import { api, type ItemPatch } from '@/api'
 import { ROLE_LABEL } from '@/constants'
-import type { Item, ItemDraft, ItemType, Role, StatusKey } from '@/types'
+import type { Item, ItemDraft, ItemType, PortKey, Role, StatusKey } from '@/types'
 
 /** 全局状态（模块级单例，组件直接引入使用） */
 export const items = ref<Item[]>([])
 export const errorMessage = ref('')
 export const activeType = ref<ItemType>('requirement')
+/** 归档视图：非 null 时中栏只显示该类型下 status='archived' 的条目 */
+export const archivedView = ref<ItemType | null>(null)
 export const activeId = ref('')
 export const statusFilter = ref<StatusKey | 'all'>('all')
+/** 适用端口筛选（多选）；空数组 = 不筛选 */
+export const portFilter = ref<PortKey[]>([])
 export const currentRole = ref<Role>(readRole())
 /** 新建面板是否展开 */
 export const composerOpen = ref(false)
@@ -28,16 +32,18 @@ export function setRole(role: Role): void {
   localStorage.setItem('todo-board:role', role)
 }
 
-/** 当前类型下各状态的数量 */
+/** 当前类型下各状态的数量（不含已归档，与主列表口径一致） */
 export const statusCounts = computed<Record<StatusKey | 'all', number>>(() => {
   const base: Record<string, number> = { all: 0 }
-  const scoped = items.value.filter((it) => it.type === activeType.value)
+  const scoped = items.value.filter(
+    (it) => it.type === activeType.value && it.status !== 'archived',
+  )
   base.all = scoped.length
   for (const it of scoped) base[it.status] = (base[it.status] ?? 0) + 1
   return base as Record<StatusKey | 'all', number>
 })
 
-/** 左侧两类各自的待办数量（不含验证通过） */
+/** 左侧两类各自的待办数量（不含验证通过、不含已归档） */
 export const typeCounts = computed<Record<ItemType, { total: number; open: number }>>(() => {
   const mk = () => ({ total: 0, open: 0 })
   const out: Record<ItemType, { total: number; open: number }> = {
@@ -45,17 +51,54 @@ export const typeCounts = computed<Record<ItemType, { total: number; open: numbe
     defect: mk(),
   }
   for (const it of items.value) {
+    if (it.status === 'archived') continue
     out[it.type].total += 1
     if (it.status !== 'passed') out[it.type].open += 1
   }
   return out
 })
 
+/** 两类各自的已归档数量 */
+export const archivedCounts = computed<Record<ItemType, number>>(() => {
+  const out: Record<ItemType, number> = { requirement: 0, defect: 0 }
+  for (const it of items.value) {
+    if (it.status === 'archived') out[it.type] += 1
+  }
+  return out
+})
+
+/** 当前视图的范围（归档视图：该类型已归档；主视图：该类型未归档），不含状态/端口筛选 */
+const scopedItems = computed(() =>
+  archivedView.value
+    ? items.value.filter((it) => it.type === archivedView.value && it.status === 'archived')
+    : items.value.filter((it) => it.type === activeType.value && it.status !== 'archived'),
+)
+
+/** 当前范围内含各端口的条目数（任一匹配口径，供端口筛选下拉展示） */
+export const portCounts = computed<Record<PortKey, number>>(() => {
+  const out: Record<PortKey, number> = { '8080': 0, '8318': 0 }
+  for (const it of scopedItems.value) {
+    for (const p of it.ports) {
+      if (p === '8080' || p === '8318') out[p] += 1
+    }
+  }
+  return out
+})
+
 /** 当前展示的列表 */
 export const visibleItems = computed(() => {
-  const list = items.value.filter((it) => it.type === activeType.value)
-  const filtered = statusFilter.value === 'all' ? list : list.filter((it) => it.status === statusFilter.value)
-  return [...filtered].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  let list: Item[]
+  if (archivedView.value) {
+    list = [...scopedItems.value]
+  } else {
+    list = scopedItems.value.filter(
+      (it) => statusFilter.value === 'all' || it.status === statusFilter.value,
+    )
+  }
+  if (portFilter.value.length > 0) {
+    list = list.filter((it) => it.ports.some((p) => portFilter.value.includes(p)))
+  }
+  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 })
 
 export const activeItem = computed(() => items.value.find((it) => it.id === activeId.value) ?? null)
@@ -86,7 +129,9 @@ export async function createItem(draft: ItemDraft, files: File[] = []): Promise<
     const created = await api.create(draft)
     items.value = [created, ...items.value]
     activeType.value = created.type
+    archivedView.value = null
     statusFilter.value = 'all'
+    portFilter.value = []
     activeId.value = created.id
     exitPick()
     if (files.length > 0) await uploadAttachments(created.id, files)
@@ -170,9 +215,21 @@ export function clearAttachmentError(): void {
 
 export function selectType(type: ItemType): void {
   activeType.value = type
+  archivedView.value = null
   statusFilter.value = 'all'
+  portFilter.value = []
   activeId.value = visibleItems.value[0]?.id ?? ''
   // 显式清空选择：切换分类后旧选中项已不可见，留着容易误删
+  exitPick()
+}
+
+/** 进入某类型的归档视图 */
+export function selectArchived(type: ItemType): void {
+  activeType.value = type
+  archivedView.value = type
+  statusFilter.value = 'all'
+  portFilter.value = []
+  activeId.value = visibleItems.value[0]?.id ?? ''
   exitPick()
 }
 

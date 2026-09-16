@@ -9,10 +9,17 @@ import { UPLOAD_DIR } from '../paths.js'
 const router = Router()
 
 const TYPES = ['requirement', 'defect']
-const STATUSES = ['pending', 'developing', 'verifying', 'passed', 'rework']
+const STATUSES = ['pending', 'developing', 'verifying', 'passed', 'rework', 'archived']
+const PORTS = ['8080', '8318']
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024)
 
-const ITEM_COLS = 'id, type, title, description, status, created_at, updated_at'
+const ITEM_COLS = 'id, type, title, description, status, ports, created_at, updated_at'
+
+/** 端口入参 → 合法子集数组；入参不是数组时返回 null（表示请求里没带） */
+function normalizePorts(input) {
+  if (!Array.isArray(input)) return null
+  return PORTS.filter((p) => input.includes(p))
+}
 
 /* ---------- 附件上传 ---------- */
 
@@ -96,6 +103,9 @@ async function hydrate(rows) {
     title: r.title,
     description: r.description ?? '',
     status: r.status,
+    ports: String(r.ports ?? '')
+      .split(',')
+      .filter(Boolean),
     attachments: attMap.get(r.id) ?? [],
     comments: cmtMap.get(r.id) ?? [],
     createdAt: toIso(r.created_at),
@@ -132,18 +142,31 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { type = 'requirement', title, description = '', status = 'pending' } = req.body ?? {}
+    const { type = 'requirement', title, description = '', status = 'pending', ports } = req.body ?? {}
 
     if (!TYPES.includes(type)) return res.status(400).json({ message: '类型不合法' })
     if (!title || !String(title).trim()) return res.status(400).json({ message: '标题不能为空' })
     if (!STATUSES.includes(status)) return res.status(400).json({ message: '状态不合法' })
+    if (ports !== undefined && !Array.isArray(ports)) {
+      return res.status(400).json({ message: '适用端口不合法' })
+    }
+    const portList = normalizePorts(ports) ?? []
 
     const now = new Date()
     const id = randomUUID()
 
     await pool.query(
-      'INSERT INTO items (id, type, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, type, String(title).trim().slice(0, 200), String(description), status, now, now],
+      'INSERT INTO items (id, type, title, description, status, ports, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        type,
+        String(title).trim().slice(0, 200),
+        String(description),
+        status,
+        portList.join(','),
+        now,
+        now,
+      ],
     )
 
     res.status(201).json(await loadOne(id))
@@ -156,7 +179,7 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const { title, description, status, type } = req.body ?? {}
+    const { title, description, status, type, ports } = req.body ?? {}
     const sets = []
     const params = []
 
@@ -179,6 +202,11 @@ router.patch('/:id', async (req, res, next) => {
       if (!TYPES.includes(type)) return res.status(400).json({ message: '类型不合法' })
       sets.push('type = ?')
       params.push(type)
+    }
+    if (ports !== undefined) {
+      if (!Array.isArray(ports)) return res.status(400).json({ message: '适用端口不合法' })
+      sets.push('ports = ?')
+      params.push((normalizePorts(ports) ?? []).join(','))
     }
 
     if (sets.length === 0) return res.status(400).json({ message: '没有需要更新的字段' })
