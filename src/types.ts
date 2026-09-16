@@ -41,6 +41,8 @@ export interface Item {
   status: StatusKey
   /** 适用端口，取值 '8080' / '8318'，可多选；空数组表示未指定 */
   ports: PortKey[]
+  /** 已完成（上线/开发完成）的端口，必为 ports 的子集；用于多端口分别完成的进度提示 */
+  donePorts: PortKey[]
   attachments: Attachment[]
   comments: Comment[]
   createdAt: string

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS items (
   description  TEXT         NULL,
   status       VARCHAR(16)  NOT NULL DEFAULT 'pending' COMMENT 'pending / developing / verifying / passed / rework / archived',
   ports        VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '适用端口，逗号分隔：8080 / 8318',
+  done_ports   VARCHAR(32)  NOT NULL DEFAULT '' COMMENT '已完成端口，逗号分隔，须为 ports 的子集',
   created_at   DATETIME(3)  NOT NULL,
   updated_at   DATETIME(3)  NOT NULL,
   PRIMARY KEY (id),

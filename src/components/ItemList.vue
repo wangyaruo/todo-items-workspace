@@ -25,7 +25,8 @@ import {
   visibleItems,
 } from '@/store/board'
 import { relativeTime } from '@/utils/format'
-import type { StatusKey } from '@/types'
+import { portProgress } from '@/utils/ports'
+import type { Item, StatusKey } from '@/types'
 
 const heading = computed(() =>
   archivedView.value ? `已归档${typeMeta(activeType.value).label}` : typeMeta(activeType.value).label,
@@ -110,6 +111,16 @@ async function onDeletePicked(): Promise<void> {
 function excerpt(text: string): string {
   const t = text.replace(/\s+/g, ' ').trim()
   return t.length > 58 ? `${t.slice(0, 58)}…` : t || '（无描述）'
+}
+
+/** 已完成端口数 */
+function doneCount(it: Item): number {
+  return portProgress(it.ports, it.donePorts).done
+}
+
+/** 部分完成（多端口只完成了一部分）——卡片上需要醒目标出来 */
+function isPartial(it: Item): boolean {
+  return portProgress(it.ports, it.donePorts).partial
 }
 
 /** 卡片上的端口小标签 */
@@ -281,9 +292,29 @@ function portTags(ports: string[] | undefined) {
                   v-for="p in portTags(it.ports)"
                   :key="p.key"
                   class="port-tag"
+                  :class="{ 'port-tag--done': it.donePorts.includes(p.key) }"
                   :style="{ color: p.color, background: p.bg, borderColor: p.border }"
+                  :title="it.donePorts.includes(p.key) ? `${p.label} 已完成` : `${p.label} 未完成`"
                 >
+                  <svg v-if="it.donePorts.includes(p.key)" viewBox="0 0 16 16" width="9" height="9" aria-hidden="true">
+                    <path
+                      d="M3.4 8.5l3 2.9 6.2-6.6"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                   {{ p.label }}
+                </span>
+                <span
+                  v-if="it.ports.length > 1"
+                  class="port-ratio"
+                  :class="{ 'port-ratio--warn': isPartial(it) }"
+                  :title="`已完成 ${doneCount(it)} / ${it.ports.length} 个端口`"
+                >
+                  {{ doneCount(it) }}/{{ it.ports.length }}
                 </span>
               </span>
               <span v-if="it.attachments.length" class="meta" title="附件">
@@ -688,12 +719,14 @@ function portTags(ports: string[] | undefined) {
 
 .port-tags {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
 .port-tag {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   height: 17px;
   padding: 0 6px;
   border: 1px solid;
@@ -702,6 +735,24 @@ function portTags(ports: string[] | undefined) {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
+}
+
+.port-tag--done {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.port-ratio {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.port-ratio--warn {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #fffbeb;
+  color: #b45309;
 }
 
 .time {

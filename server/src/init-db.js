@@ -32,13 +32,21 @@ try {
   const sql = await readFile(join(here, 'schema.sql'), 'utf8')
   await conn.query(sql)
 
-  // 迁移：给旧库补 ports 列（CREATE TABLE IF NOT EXISTS 不会更新已存在的表）
+  // 迁移：给旧库补 ports / done_ports 列（CREATE TABLE IF NOT EXISTS 不会更新已存在的表）
   const [cols] = await conn.query("SHOW COLUMNS FROM items LIKE 'ports'")
   if (cols.length === 0) {
     await conn.query(
       "ALTER TABLE items ADD COLUMN ports VARCHAR(32) NOT NULL DEFAULT '' COMMENT '适用端口，逗号分隔：8080 / 8318' AFTER status",
     )
     console.log('已为 items 表新增 ports 列')
+  }
+
+  const [doneCols] = await conn.query("SHOW COLUMNS FROM items LIKE 'done_ports'")
+  if (doneCols.length === 0) {
+    await conn.query(
+      "ALTER TABLE items ADD COLUMN done_ports VARCHAR(32) NOT NULL DEFAULT '' COMMENT '已完成端口，逗号分隔，须为 ports 的子集' AFTER ports",
+    )
+    console.log('已为 items 表新增 done_ports 列')
   }
 
   const [tables] = await conn.query('SHOW TABLES')

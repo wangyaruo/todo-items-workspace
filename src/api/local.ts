@@ -15,8 +15,12 @@ function readAll(): Item[] {
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    // 兼容旧数据：没有 ports 字段的条目补空数组
-    return (parsed as Item[]).map((it) => ({ ...it, ports: (it.ports ?? []) as PortKey[] }))
+    // 兼容旧数据：没有 ports / donePorts 字段的条目补空数组
+    return (parsed as Item[]).map((it) => ({
+      ...it,
+      ports: (it.ports ?? []) as PortKey[],
+      donePorts: (it.donePorts ?? []) as PortKey[],
+    }))
   } catch {
     return []
   }
@@ -63,6 +67,7 @@ export const localApi: BoardApi = {
       description: draft.description,
       status: draft.status,
       ports: [...draft.ports],
+      donePorts: [],
       attachments: [],
       comments: [],
       createdAt: now,
@@ -78,6 +83,8 @@ export const localApi: BoardApi = {
     const all = readAll()
     const idx = indexOf(all, id)
     const next: Item = { ...all[idx], ...patch, updatedAt: new Date().toISOString() }
+    // 完成标记必须是适用端口的子集：端口被移除时同步剔除对应的完成标记
+    next.donePorts = (next.donePorts ?? []).filter((p) => next.ports.includes(p))
     all[idx] = next
     writeAll(all)
     return next

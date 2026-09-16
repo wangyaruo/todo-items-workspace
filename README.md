@@ -35,6 +35,17 @@
 选中态用不同颜色区分（蓝 / 青 / 琥珀），列表卡片与详情页头部都会显示对应的端口小标签。
 数据存 `items.ports` 列（逗号分隔）；旧库执行 `npm run init-db` 会自动补列，旧数据视为未指定。
 
+## 端口完成进度（多端口分别完成提示）
+
+一个条目若适用两个端口（8080 + 8318），实际开发中常常先完成其中一个。为此给每个端口加了独立的完成标记：
+
+- **详情页「适用端口」区块**：点端口标签即可切换「已完成 / 未完成」（已完成带 ✓ 并加内描边，未完成的在半完成状态下变淡）；右侧显示进度 `1 / 2`
+- **部分完成提示**：只完成了一部分时，区块下方出现琥珀色提示条「**8080** 已完成，**8318** 待完成」，区块标题右侧标注「部分完成」；全部完成时改为绿色提示条
+- **列表卡片**：端口标签带 ✓ 表示该端口已完成，多端口条目额外显示 `1/2` 进度，未完成时进度以琥珀色底标出
+- **左侧清单入口**：该类型存在部分完成条目时，导航项上显示琥珀色计数徽标（悬停看说明）
+
+数据存 `items.done_ports` 列（逗号分隔，必须是 `ports` 的子集）；调整适用端口时，不再适用的完成标记会同步剔除。完成标记与条目状态是两套信号：**标记全部完成不会自动改变条目状态**（避免与验收流程混淆）。
+
 ## 删除条目
 
 两条路径，都要二次确认：
@@ -207,7 +218,7 @@ location / {
 |---|---|---|
 | GET | `/api/items` | 列表，可带 `?type=requirement\|defect` |
 | POST | `/api/items` | 新建，body：`type` `title` `description` `status` `ports`（端口数组，如 `["8080","8318"]`） |
-| PATCH | `/api/items/:id` | 局部更新，body 同上任选 |
+| PATCH | `/api/items/:id` | 局部更新，body 同上任选，另支持 `donePorts`（已完成端口数组） |
 | DELETE | `/api/items/:id` | 删除，级联清理评论与磁盘附件 |
 | POST | `/api/items/:id/comments` | 添加评论，body：`author` `role` `body` |
 | POST | `/api/items/:id/attachments` | 上传附件，multipart 字段名 `file` |
@@ -220,7 +231,7 @@ location / {
 
 | 表 | 用途 | 关键字段 |
 |---|---|---|
-| `items` | 一条需求 / 缺陷 | `type` `title` `description` `status` `ports`（适用端口，逗号分隔）`created_at` `updated_at` |
+| `items` | 一条需求 / 缺陷 | `type` `title` `description` `status` `ports`（适用端口，逗号分隔）`done_ports`（已完成端口，逗号分隔）`created_at` `updated_at` |
 | `attachments` | 附件 | `item_id` `name` `size` `mime` `url` |
 | `comments` | 完成情况 | `item_id` `author` `role` `body` |
 

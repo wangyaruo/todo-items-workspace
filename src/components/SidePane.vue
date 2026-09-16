@@ -6,6 +6,7 @@ import {
   archivedView,
   currentRole,
   composerOpen,
+  partialCounts,
   selectArchived,
   selectType,
   setRole,
@@ -57,6 +58,14 @@ const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: RO
         <span class="nav-sub">{{ typeCounts[t.key].open }} 项未完成</span>
       </span>
 
+      <span
+        v-if="partialCounts[t.key]"
+        class="nav-warn"
+        :title="`${partialCounts[t.key]} 条适用多端口但只完成了一部分`"
+      >
+        <i class="nav-warn-dot" />
+        {{ partialCounts[t.key] }}
+      </span>
       <span class="nav-count">{{ typeCounts[t.key].total }}</span>
     </button>
 
@@ -217,6 +226,29 @@ const ROLES = (Object.keys(ROLE_LABEL) as Role[]).map((key) => ({ key, label: RO
   line-height: 20px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+/* 部分完成提醒：琥珀色小徽标 */
+.nav-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-warn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d97706;
 }
 
 .nav--active .nav-count {

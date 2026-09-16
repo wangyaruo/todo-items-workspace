@@ -13,12 +13,19 @@ const STATUSES = ['pending', 'developing', 'verifying', 'passed', 'rework', 'arc
 const PORTS = ['8080', '8318']
 const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024)
 
-const ITEM_COLS = 'id, type, title, description, status, ports, created_at, updated_at'
+const ITEM_COLS = 'id, type, title, description, status, ports, done_ports, created_at, updated_at'
 
 /** 端口入参 → 合法子集数组；入参不是数组时返回 null（表示请求里没带） */
 function normalizePorts(input) {
   if (!Array.isArray(input)) return null
   return PORTS.filter((p) => input.includes(p))
+}
+
+/** 逗号分隔字段 → 数组 */
+function splitList(value) {
+  return String(value ?? '')
+    .split(',')
+    .filter(Boolean)
 }
 
 /* ---------- 附件上传 ---------- */
@@ -103,9 +110,8 @@ async function hydrate(rows) {
     title: r.title,
     description: r.description ?? '',
     status: r.status,
-    ports: String(r.ports ?? '')
-      .split(',')
-      .filter(Boolean),
+    ports: splitList(r.ports),
+    donePorts: splitList(r.done_ports),
     attachments: attMap.get(r.id) ?? [],
     comments: cmtMap.get(r.id) ?? [],
     createdAt: toIso(r.created_at),
@@ -156,7 +162,7 @@ router.post('/', async (req, res, next) => {
     const id = randomUUID()
 
     await pool.query(
-      'INSERT INTO items (id, type, title, description, status, ports, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO items (id, type, title, description, status, ports, done_ports, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id,
         type,
@@ -164,6 +170,8 @@ router.post('/', async (req, res, next) => {
         String(description),
         status,
         portList.join(','),
+        // 新建时没有任何端口算完成
+        '',
         now,
         now,
       ],
@@ -179,7 +187,7 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const { title, description, status, type, ports } = req.body ?? {}
+    const { title, description, status, type, ports, donePorts } = req.body ?? {}
     const sets = []
     const params = []
 
@@ -207,6 +215,23 @@ router.patch('/:id', async (req, res, next) => {
       if (!Array.isArray(ports)) return res.status(400).json({ message: '适用端口不合法' })
       sets.push('ports = ?')
       params.push((normalizePorts(ports) ?? []).join(','))
+    }
+
+    // 完成标记只对适用端口有效：端口被改动时同步剔除不再适用的标记
+    if (ports !== undefined || donePorts !== undefined) {
+      const [rows] = await pool.query('SELECT ports, done_ports FROM items WHERE id = ?', [
+        req.params.id,
+      ])
+      if (rows.length === 0) return res.status(404).json({ message: '条目不存在' })
+      if (donePorts !== undefined && !Array.isArray(donePorts)) {
+        return res.status(400).json({ message: '完成端口不合法' })
+      }
+      const effectivePorts =
+        ports !== undefined ? normalizePorts(ports) ?? [] : splitList(rows[0].ports)
+      const requested =
+        donePorts !== undefined ? normalizePorts(donePorts) ?? [] : splitList(rows[0].done_ports)
+      sets.push('done_ports = ?')
+      params.push(requested.filter((p) => effectivePorts.includes(p)).join(','))
     }
 
     if (sets.length === 0) return res.status(400).json({ message: '没有需要更新的字段' })

@@ -7,6 +7,7 @@ export interface ItemPatch {
   description?: string
   status?: StatusKey
   ports?: PortKey[]
+  donePorts?: PortKey[]
 }
 
 export interface NewComment {

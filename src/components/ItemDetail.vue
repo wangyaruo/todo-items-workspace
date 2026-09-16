@@ -13,11 +13,13 @@ import {
   deleteItem,
   patchItem,
   removeAttachment,
+  toggleDonePort,
   uploadAttachments,
 } from '@/store/board'
 import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard, isImageMime } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/format'
+import { portProgress, portText } from '@/utils/ports'
 import type { Attachment, PortKey, StatusKey } from '@/types'
 
 const editing = ref(false)
@@ -62,6 +64,34 @@ const portTags = computed(() => {
     .map((k) => PORT_OPTIONS.find((p) => p.key === k))
     .filter((p): p is (typeof PORT_OPTIONS)[number] => Boolean(p))
 })
+
+/** 端口完成进度（多端口分别完成时用于提示） */
+const progress = computed(() => {
+  const it = activeItem.value
+  return portProgress(it?.ports ?? [], it?.donePorts ?? [])
+})
+
+const donePortsText = computed(() =>
+  portText((activeItem.value?.ports ?? []).filter((p) => isPortDone(p))),
+)
+
+function isPortDone(key: PortKey): boolean {
+  return (activeItem.value?.donePorts ?? []).includes(key)
+}
+
+/** 完成标记写入中（防连点：上一次未返回前不再发起，避免基于旧状态二次切换） */
+const portBusy = ref(false)
+
+async function onTogglePort(key: PortKey): Promise<void> {
+  const it = activeItem.value
+  if (!it || portBusy.value) return
+  portBusy.value = true
+  try {
+    await toggleDonePort(it.id, key)
+  } finally {
+    portBusy.value = false
+  }
+}
 
 /** 编辑态：「全部」= 8080 和 8318 都选中 */
 const draftAllPorts = computed(() => draftPorts.value.length === PORT_OPTIONS.length)
@@ -364,6 +394,7 @@ async function doDelete(): Promise<void> {
             </svg>
           </span>
           适用端口
+          <span v-if="progress.partial" class="block-note block-note--warn">部分完成</span>
         </h3>
 
         <div v-if="editing" class="segs">
@@ -390,16 +421,62 @@ async function doDelete(): Promise<void> {
         </div>
 
         <div v-else class="port-view">
-          <span
-            v-for="p in portTags"
-            :key="p.key"
-            class="port-tag port-tag--lg"
-            :style="{ color: p.color, background: p.bg, borderColor: p.border }"
-          >
-            {{ p.label }}
-          </span>
-          <span v-if="!portTags.length" class="port-empty">（未指定）</span>
+          <template v-if="portTags.length">
+            <button
+              v-for="p in portTags"
+              :key="p.key"
+              class="port-tag port-tag--lg port-tag--btn"
+              :class="{ 'port-tag--done': isPortDone(p.key), 'port-tag--pending': progress.partial && !isPortDone(p.key) }"
+              :style="{ color: p.color, background: p.bg, borderColor: p.border }"
+              :aria-pressed="isPortDone(p.key)"
+              :title="isPortDone(p.key) ? '点击取消完成标记' : '点击标记该端口已完成'"
+              @click="onTogglePort(p.key)"
+            >
+              <svg v-if="isPortDone(p.key)" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+                <path
+                  d="M3.4 8.5l3 2.9 6.2-6.6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              {{ p.label }}
+            </button>
+            <span v-if="progress.total > 1" class="port-ratio">{{ progress.done }} / {{ progress.total }}</span>
+          </template>
+          <span v-else class="port-empty">（未指定）</span>
         </div>
+
+        <p v-if="portTags.length" class="port-tip">点端口标签可标记该端口的完成情况</p>
+
+        <p v-if="progress.partial" class="port-alert port-alert--warn">
+          <span class="port-alert-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" />
+              <path d="M8 4.9v3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              <circle cx="8" cy="11.1" r="0.9" fill="currentColor" />
+            </svg>
+          </span>
+          <b>{{ donePortsText }}</b> 已完成，<b>{{ portText(progress.pending) }}</b> 待完成
+        </p>
+        <p v-else-if="progress.allDone && progress.total > 1" class="port-alert port-alert--ok">
+          <span class="port-alert-ico">
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" />
+              <path
+                d="M5.2 8.3l2 2 3.6-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          {{ portText(activeItem.ports) }} 均已标记完成
+        </p>
       </section>
 
       <!-- 状态 -->
@@ -652,6 +729,81 @@ async function doDelete(): Promise<void> {
   padding: 0 11px;
   border-radius: 7px;
   font-size: 13px;
+}
+
+/* 可点击的完成标记 */
+.port-tag--btn {
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease), box-shadow 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+
+.port-tag--btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.port-tag--done {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.port-tag--pending {
+  opacity: 0.55;
+}
+
+.port-ratio {
+  margin-left: 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.port-tip {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* 部分完成 / 全部完成的提示条 */
+.port-alert {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.port-alert b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.port-alert-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.port-alert--warn {
+  border-color: #fbe4b8;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.port-alert--ok {
+  border-color: #bbe7d4;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.block-note--warn {
+  color: #b45309;
+  font-weight: 600;
 }
 
 .port-empty {

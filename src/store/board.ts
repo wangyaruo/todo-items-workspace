@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { api, type ItemPatch } from '@/api'
 import { ROLE_LABEL } from '@/constants'
+import { portProgress } from '@/utils/ports'
 import type { Item, ItemDraft, ItemType, PortKey, Role, StatusKey } from '@/types'
 
 /** 全局状态（模块级单例，组件直接引入使用） */
@@ -63,6 +64,16 @@ export const archivedCounts = computed<Record<ItemType, number>>(() => {
   const out: Record<ItemType, number> = { requirement: 0, defect: 0 }
   for (const it of items.value) {
     if (it.status === 'archived') out[it.type] += 1
+  }
+  return out
+})
+
+/** 左侧入口提醒：各类型「部分完成」的条目数（多端口只完成了其中一部分） */
+export const partialCounts = computed<Record<ItemType, number>>(() => {
+  const out: Record<ItemType, number> = { requirement: 0, defect: 0 }
+  for (const it of items.value) {
+    if (it.status === 'archived') continue
+    if (portProgress(it.ports, it.donePorts).partial) out[it.type] += 1
   }
   return out
 })
@@ -149,6 +160,16 @@ export async function patchItem(id: string, patch: ItemPatch): Promise<void> {
   } catch (err) {
     errorMessage.value = (err as Error).message || '更新失败'
   }
+}
+
+/** 切换某个端口是否已完成（完成标记只对适用端口有效） */
+export async function toggleDonePort(id: string, port: PortKey): Promise<void> {
+  const it = items.value.find((x) => x.id === id)
+  if (!it) return
+  const donePorts = it.donePorts.includes(port)
+    ? it.donePorts.filter((p) => p !== port)
+    : [...it.donePorts, port]
+  await patchItem(id, { donePorts })
 }
 
 export async function deleteItem(id: string): Promise<void> {
