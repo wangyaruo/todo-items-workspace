@@ -33,6 +33,11 @@ const pasteNote = ref('')
 const viewer = ref<Attachment | null>(null)
 const shotInput = ref<HTMLInputElement | null>(null)
 
+/** 完成标记写入中（防连点：上一次未返回前不再发起，避免基于旧状态二次切换） */
+const portBusy = ref(false)
+/** 端口操作的临时提示（如自动退回开发中） */
+const portNote = ref('')
+
 watch(
   activeItem,
   (it) => {
@@ -79,11 +84,6 @@ const donePortsText = computed(() =>
 function isPortDone(key: PortKey): boolean {
   return (activeItem.value?.donePorts ?? []).includes(key)
 }
-
-/** 完成标记写入中（防连点：上一次未返回前不再发起，避免基于旧状态二次切换） */
-const portBusy = ref(false)
-/** 端口操作的临时提示（如自动退回开发中） */
-const portNote = ref('')
 
 async function onTogglePort(key: PortKey): Promise<void> {
   const it = activeItem.value
