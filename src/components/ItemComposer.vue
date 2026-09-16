@@ -7,8 +7,8 @@ import { acceptFiles } from '@/utils/attachments'
 import { imageFilesFromClipboard } from '@/utils/clipboard'
 import type { Attachment, ItemType, PortKey, StatusKey } from '@/types'
 
-/** 初始状态可选值：不含「已归档」（归档是后续流转动作，不是初始态） */
-const INITIAL_STATUSES = STATUS_FLOW.filter((s) => s.key !== 'archived')
+/** 初始状态可选值：不含「已归档」（流转动作）；不含「待验证」（需先完成至少一个端口，新建不可能满足） */
+const INITIAL_STATUSES = STATUS_FLOW.filter((s) => s.key !== 'archived' && s.key !== 'verifying')
 
 const type = ref<ItemType>('requirement')
 const title = ref('')

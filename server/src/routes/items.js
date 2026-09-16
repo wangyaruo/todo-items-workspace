@@ -5,6 +5,7 @@ import { basename, extname, join } from 'node:path'
 import { unlink } from 'node:fs/promises'
 import { pool, toIso } from '../db.js'
 import { UPLOAD_DIR } from '../paths.js'
+import { applyVerifyingRule } from '../verifying-rule.js'
 
 const router = Router()
 
@@ -153,6 +154,10 @@ router.post('/', async (req, res, next) => {
     if (!TYPES.includes(type)) return res.status(400).json({ message: '类型不合法' })
     if (!title || !String(title).trim()) return res.status(400).json({ message: '标题不能为空' })
     if (!STATUSES.includes(status)) return res.status(400).json({ message: '状态不合法' })
+    if (status === 'verifying') {
+      // 「待验证」要求至少一个端口已完成，新建时不可能满足
+      return res.status(400).json({ message: '新建时不能设为「待验证」：至少需一个端口已完成' })
+    }
     if (ports !== undefined && !Array.isArray(ports)) {
       return res.status(400).json({ message: '适用端口不合法' })
     }
@@ -201,37 +206,56 @@ router.patch('/:id', async (req, res, next) => {
       sets.push('description = ?')
       params.push(String(description))
     }
-    if (status !== undefined) {
-      if (!STATUSES.includes(status)) return res.status(400).json({ message: '状态不合法' })
-      sets.push('status = ?')
-      params.push(status)
+    if (status !== undefined && !STATUSES.includes(status)) {
+      return res.status(400).json({ message: '状态不合法' })
+    }
+    if (ports !== undefined && !Array.isArray(ports)) {
+      return res.status(400).json({ message: '适用端口不合法' })
+    }
+    if (donePorts !== undefined && !Array.isArray(donePorts)) {
+      return res.status(400).json({ message: '完成端口不合法' })
     }
     if (type !== undefined) {
       if (!TYPES.includes(type)) return res.status(400).json({ message: '类型不合法' })
       sets.push('type = ?')
       params.push(type)
     }
-    if (ports !== undefined) {
-      if (!Array.isArray(ports)) return res.status(400).json({ message: '适用端口不合法' })
-      sets.push('ports = ?')
-      params.push((normalizePorts(ports) ?? []).join(','))
-    }
 
-    // 完成标记只对适用端口有效：端口被改动时同步剔除不再适用的标记
-    if (ports !== undefined || donePorts !== undefined) {
-      const [rows] = await pool.query('SELECT ports, done_ports FROM items WHERE id = ?', [
-        req.params.id,
-      ])
+    // 状态与端口字段联动：「待验证」要求至少一个端口已完成（规则见 verifying-rule.js）
+    if (status !== undefined || ports !== undefined || donePorts !== undefined) {
+      const [rows] = await pool.query(
+        'SELECT status, ports, done_ports FROM items WHERE id = ?',
+        [req.params.id],
+      )
       if (rows.length === 0) return res.status(404).json({ message: '条目不存在' })
-      if (donePorts !== undefined && !Array.isArray(donePorts)) {
-        return res.status(400).json({ message: '完成端口不合法' })
+
+      const rule = applyVerifyingRule(
+        {
+          status: rows[0].status,
+          ports: splitList(rows[0].ports),
+          donePorts: splitList(rows[0].done_ports),
+        },
+        {
+          ...(status !== undefined ? { status } : {}),
+          ...(ports !== undefined ? { ports: normalizePorts(ports) ?? [] } : {}),
+          ...(donePorts !== undefined ? { donePorts: normalizePorts(donePorts) ?? [] } : {}),
+        },
+      )
+      if (rule.error) return res.status(400).json({ message: rule.error })
+
+      // 显式改了状态，或规则触发了自动退回
+      if (status !== undefined || rule.status !== rows[0].status) {
+        sets.push('status = ?')
+        params.push(rule.status)
       }
-      const effectivePorts =
-        ports !== undefined ? normalizePorts(ports) ?? [] : splitList(rows[0].ports)
-      const requested =
-        donePorts !== undefined ? normalizePorts(donePorts) ?? [] : splitList(rows[0].done_ports)
-      sets.push('done_ports = ?')
-      params.push(requested.filter((p) => effectivePorts.includes(p)).join(','))
+      if (ports !== undefined) {
+        sets.push('ports = ?')
+        params.push((normalizePorts(ports) ?? []).join(','))
+      }
+      if (ports !== undefined || donePorts !== undefined) {
+        sets.push('done_ports = ?')
+        params.push(rule.donePorts.join(','))
+      }
     }
 
     if (sets.length === 0) return res.status(400).json({ message: '没有需要更新的字段' })

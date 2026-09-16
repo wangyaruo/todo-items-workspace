@@ -40,6 +40,7 @@ watch(
     confirmDelete.value = false
     localError.value = ''
     pasteNote.value = ''
+    portNote.value = ''
     viewer.value = null
     clearAttachmentError()
     if (it) {
@@ -81,13 +82,21 @@ function isPortDone(key: PortKey): boolean {
 
 /** 完成标记写入中（防连点：上一次未返回前不再发起，避免基于旧状态二次切换） */
 const portBusy = ref(false)
+/** 端口操作的临时提示（如自动退回开发中） */
+const portNote = ref('')
 
 async function onTogglePort(key: PortKey): Promise<void> {
   const it = activeItem.value
   if (!it || portBusy.value) return
   portBusy.value = true
+  const wasVerifying = it.status === 'verifying'
   try {
     await toggleDonePort(it.id, key)
+    if (wasVerifying && activeItem.value?.status === 'developing') {
+      portNote.value = '已取消最后一个完成端口，状态已自动退回「开发中」。'
+    } else {
+      portNote.value = ''
+    }
   } finally {
     portBusy.value = false
   }
@@ -148,6 +157,10 @@ async function save(): Promise<void> {
 async function setStatus(key: StatusKey): Promise<void> {
   const it = activeItem.value
   if (!it || it.status === key || busy.value) return
+  if (key === 'verifying' && it.donePorts.length === 0) {
+    localError.value = '至少有一个端口标记完成后，才能改为「待验证」。'
+    return
+  }
   busy.value = true
   await patchItem(it.id, { status: key })
   busy.value = false
@@ -450,6 +463,7 @@ async function doDelete(): Promise<void> {
         </div>
 
         <p v-if="portTags.length" class="port-tip">点端口标签可标记该端口的完成情况</p>
+        <p v-if="portNote" class="port-tip port-tip--note">{{ portNote }}</p>
 
         <p v-if="progress.partial" class="port-alert port-alert--warn">
           <span class="port-alert-ico">
@@ -763,6 +777,11 @@ async function doDelete(): Promise<void> {
   margin: 9px 0 0;
   font-size: 11.5px;
   color: var(--text-3);
+}
+
+.port-tip--note {
+  color: #b45309;
+  font-weight: 600;
 }
 
 /* 部分完成 / 全部完成的提示条 */

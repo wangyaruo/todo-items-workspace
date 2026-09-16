@@ -1,5 +1,6 @@
 import type { Attachment, Item, ItemDraft, PortKey } from '@/types'
 import { uid } from '@/utils/format'
+import { applyVerifyingRule } from '@/utils/ports'
 import type { BoardApi, NewComment } from './types'
 
 /**
@@ -59,6 +60,9 @@ export const localApi: BoardApi = {
   },
 
   async create(draft: ItemDraft) {
+    if (draft.status === 'verifying') {
+      throw new Error('新建时不能设为「待验证」：至少需一个端口已完成。')
+    }
     const now = new Date().toISOString()
     const item: Item = {
       id: uid('item'),
@@ -83,8 +87,15 @@ export const localApi: BoardApi = {
     const all = readAll()
     const idx = indexOf(all, id)
     const next: Item = { ...all[idx], ...patch, updatedAt: new Date().toISOString() }
-    // 完成标记必须是适用端口的子集：端口被移除时同步剔除对应的完成标记
-    next.donePorts = (next.donePorts ?? []).filter((p) => next.ports.includes(p))
+    // 「待验证」规则：至少一个端口已完成；取消最后一个完成标记时自动退回开发中
+    const rule = applyVerifyingRule(all[idx], {
+      status: patch.status,
+      ports: patch.ports,
+      donePorts: patch.donePorts,
+    })
+    if (rule.error) throw new Error(rule.error)
+    next.status = rule.status
+    next.donePorts = rule.donePorts
     all[idx] = next
     writeAll(all)
     return next
