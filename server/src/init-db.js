@@ -49,6 +49,21 @@ try {
     console.log('已为 items 表新增 done_ports 列')
   }
 
+  // 迁移：给旧库补 comments 软删除列（删除留痕：记录删除人与时间，内容不再展示）
+  const [cmtDelCols] = await conn.query("SHOW COLUMNS FROM comments LIKE 'deleted_at'")
+  if (cmtDelCols.length === 0) {
+    await conn.query(
+      "ALTER TABLE comments ADD COLUMN deleted_at DATETIME(3) NULL COMMENT '软删除时间，非空即已删除（留痕，不展示内容）' AFTER created_at",
+    )
+    await conn.query(
+      "ALTER TABLE comments ADD COLUMN deleted_by VARCHAR(50) NULL COMMENT '删除人署名' AFTER deleted_at",
+    )
+    await conn.query(
+      "ALTER TABLE comments ADD COLUMN deleted_by_role VARCHAR(16) NULL COMMENT '删除人角色 product / developer' AFTER deleted_by",
+    )
+    console.log('已为 comments 表新增 deleted_at / deleted_by / deleted_by_role 列')
+  }
+
   const [tables] = await conn.query('SHOW TABLES')
   const names = tables.map((row) => Object.values(row)[0])
   console.log(`数据库已就绪：${DB_NAME}`)

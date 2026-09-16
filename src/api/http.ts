@@ -1,5 +1,5 @@
 import type { Item } from '@/types'
-import type { BoardApi, ItemPatch, NewComment } from './types'
+import type { BoardApi, CommentIdentity, ItemPatch, NewComment } from './types'
 
 /**
  * 自有服务器实现。
@@ -51,6 +51,12 @@ export const httpApi: BoardApi = {
 
   addComment: (id, payload: NewComment) =>
     request<Item>(`${itemUrl(id)}/comments`, { method: 'POST', ...jsonBody(payload) }),
+
+  deleteComment: (id, commentId, identity: CommentIdentity) =>
+    request<Item>(`${itemUrl(id)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE',
+      ...jsonBody(identity),
+    }),
 
   uploadAttachment: (id, file) => {
     const form = new FormData()

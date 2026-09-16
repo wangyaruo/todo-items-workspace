@@ -202,6 +202,20 @@ export async function addComment(id: string, body: string): Promise<boolean> {
   }
 }
 
+/** 删除评论（软删除留痕）：只能删自己发的，后端同样校验 */
+export async function deleteComment(id: string, commentId: string): Promise<boolean> {
+  errorMessage.value = ''
+  try {
+    replaceItem(
+      await api.deleteComment(id, commentId, { author: effectiveName.value, role: currentRole.value }),
+    )
+    return true
+  } catch (err) {
+    errorMessage.value = (err as Error).message || '删除评论失败'
+    return false
+  }
+}
+
 /** 附件上传 / 删除进行中 */
 export const attachmentBusy = ref(false)
 /** 附件相关错误，就近显示在附件区 */

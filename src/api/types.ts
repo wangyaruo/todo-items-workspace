@@ -16,6 +16,12 @@ export interface NewComment {
   body: string
 }
 
+/** 删除评论时上送的操作人身份（后端校验：只能删自己发的） */
+export interface CommentIdentity {
+  author: string
+  role: Role
+}
+
 /**
  * 数据访问层契约。
  * 有两套实现：local（浏览器本地存储）与 http（自有服务器接口）。
@@ -27,6 +33,7 @@ export interface BoardApi {
   update(id: string, patch: ItemPatch): Promise<Item>
   remove(id: string): Promise<void>
   addComment(id: string, payload: NewComment): Promise<Item>
+  deleteComment(id: string, commentId: string, identity: CommentIdentity): Promise<Item>
   uploadAttachment(id: string, file: File): Promise<Item>
   removeAttachment(id: string, attachmentId: string): Promise<Item>
 }

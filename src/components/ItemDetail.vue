@@ -60,6 +60,11 @@ watch(
 const typeName = computed(() => (activeItem.value ? typeMeta(activeItem.value.type).label : ''))
 const shortId = computed(() => activeItem.value?.id.replace(/^item_/, '').slice(0, 6).toUpperCase() ?? '')
 
+/** 有效评论数（已删除留痕的不计入） */
+const activeCommentsCount = computed(
+  () => (activeItem.value?.comments ?? []).filter((c) => !c.deleted).length,
+)
+
 /** 描述区展示的图片：附件中的图片部分 */
 const shots = computed(() => (activeItem.value?.attachments ?? []).filter((a) => isImageMime(a.mime)))
 
@@ -539,7 +544,7 @@ async function doDelete(): Promise<void> {
             </svg>
           </span>
           完成情况
-          <span v-if="activeItem.comments.length" class="block-n">{{ activeItem.comments.length }}</span>
+          <span v-if="activeCommentsCount" class="block-n">{{ activeCommentsCount }}</span>
         </h3>
         <CommentThread :item-id="activeItem.id" :comments="activeItem.comments" />
       </section>

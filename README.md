@@ -12,6 +12,14 @@
 
 状态流转：待处理 → 开发中 → 待验证 → 验证通过；验收不通过回到「重新处理」；另有「已归档」——归档条目从主列表隐藏，归入左侧对应「已归档需求 / 已归档缺陷」清单，状态改回即恢复原列表可见。
 
+## 评论删除（留痕）
+
+评论区支持删除自己发布的评论（署名与角色须与当前身份一致，前端隐藏他人评论的删除入口，后端同样校验并返回 403）：
+
+- 删除为**软删除**：内容不再下发与展示，原位留下「xx（角色）删除了一条评论」的虚线占位，不可恢复
+- 数据存 `comments.deleted_at / deleted_by / deleted_by_role` 三列；旧库执行 `npm run init-db` 会自动补列
+- 详情页「完成情况」角标只计有效评论，已删除留痕不计入
+
 ## 按状态筛选
 
 列表顶部是一个下拉选择器（`src/components/StatusFilter.vue`）：收起时显示当前筛选项及其条目数，展开后列出「全部」与五档状态，每项右侧是该状态下的条目数。
@@ -236,6 +244,7 @@ location / {
 | PATCH | `/api/items/:id` | 局部更新，body 同上任选，另支持 `donePorts`（已完成端口数组） |
 | DELETE | `/api/items/:id` | 删除，级联清理评论与磁盘附件 |
 | POST | `/api/items/:id/comments` | 添加评论，body：`author` `role` `body` |
+| DELETE | `/api/items/:id/comments/:commentId` | 删除评论（软删除留痕），body：`author` `role`，仅本人可删；删除后内容不再下发，仅保留删除人信息 |
 | POST | `/api/items/:id/attachments` | 上传附件，multipart 字段名 `file` |
 | DELETE | `/api/items/:id/attachments/:attId` | 删除附件 |
 | GET | `/api/health` | 健康检查，含数据库连通性 |
@@ -248,7 +257,7 @@ location / {
 |---|---|---|
 | `items` | 一条需求 / 缺陷 | `type` `title` `description` `status` `ports`（适用端口，逗号分隔）`done_ports`（已完成端口，逗号分隔）`created_at` `updated_at` |
 | `attachments` | 附件 | `item_id` `name` `size` `mime` `url` |
-| `comments` | 完成情况 | `item_id` `author` `role` `body` |
+| `comments` | 完成情况 | `item_id` `author` `role` `body` `deleted_at` `deleted_by` `deleted_by_role`（软删除留痕） |
 
 附件文件本身存放于 `server/uploads/`，数据库只记录访问路径 `/uploads/xxx`，不存二进制。
 

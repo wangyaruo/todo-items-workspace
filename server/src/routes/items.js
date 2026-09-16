@@ -76,7 +76,7 @@ async function hydrate(rows) {
     [ids],
   )
   const [cmtRows] = await pool.query(
-    'SELECT id, item_id, author, role, body, created_at FROM comments WHERE item_id IN (?) ORDER BY created_at ASC',
+    'SELECT id, item_id, author, role, body, created_at, deleted_at, deleted_by, deleted_by_role FROM comments WHERE item_id IN (?) ORDER BY created_at ASC',
     [ids],
   )
 
@@ -96,12 +96,22 @@ async function hydrate(rows) {
   const cmtMap = new Map()
   for (const c of cmtRows) {
     if (!cmtMap.has(c.item_id)) cmtMap.set(c.item_id, [])
+    const deleted = Boolean(c.deleted_at)
     cmtMap.get(c.item_id).push({
       id: c.id,
       author: c.author,
       role: c.role,
-      body: c.body,
+      // 已删除的评论内容不下发（不可恢复，仅留痕）
+      body: deleted ? '' : c.body,
       createdAt: toIso(c.created_at),
+      ...(deleted
+        ? {
+            deleted: true,
+            deletedBy: c.deleted_by ?? '',
+            deletedByRole: c.deleted_by_role ?? c.role,
+            deletedAt: toIso(c.deleted_at),
+          }
+        : {}),
     })
   }
 
@@ -318,6 +328,38 @@ router.post('/:id/comments', async (req, res, next) => {
     await pool.query('UPDATE items SET updated_at = ? WHERE id = ?', [now, req.params.id])
 
     res.status(201).json(await loadOne(req.params.id))
+  } catch (err) {
+    next(err)
+  }
+})
+
+/**
+ * 删除评论（软删除留痕）。
+ * 规则：只能删自己发的——请求体里的署名与角色须与评论一致；
+ * 删除后内容不再下发，只保留「谁删的」占位信息，不可恢复。
+ */
+router.delete('/:id/comments/:commentId', async (req, res, next) => {
+  try {
+    const { author, role } = req.body ?? {}
+    const [rows] = await pool.query(
+      'SELECT id, author, role, deleted_at FROM comments WHERE id = ? AND item_id = ?',
+      [req.params.commentId, req.params.id],
+    )
+    if (rows.length === 0) return res.status(404).json({ message: '评论不存在' })
+    const c = rows[0]
+    if (c.deleted_at) return res.status(409).json({ message: '评论已被删除' })
+    if (c.author !== String(author ?? '') || c.role !== String(role ?? '')) {
+      return res.status(403).json({ message: '只能删除自己发布的评论' })
+    }
+
+    const now = new Date()
+    await pool.query(
+      'UPDATE comments SET deleted_at = ?, deleted_by = ?, deleted_by_role = ? WHERE id = ?',
+      [now, String(author).slice(0, 50), String(role).slice(0, 16), c.id],
+    )
+    await pool.query('UPDATE items SET updated_at = ? WHERE id = ?', [now, req.params.id])
+
+    res.json(await loadOne(req.params.id))
   } catch (err) {
     next(err)
   }

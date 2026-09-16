@@ -1,7 +1,7 @@
 import type { Attachment, Item, ItemDraft, PortKey } from '@/types'
 import { uid } from '@/utils/format'
 import { applyVerifyingRule } from '@/utils/ports'
-import type { BoardApi, NewComment } from './types'
+import type { BoardApi, CommentIdentity, NewComment } from './types'
 
 /**
  * 浏览器本地存储实现。
@@ -123,6 +123,31 @@ export const localApi: BoardApi = {
       ],
       updatedAt: now,
     }
+    all[idx] = next
+    writeAll(all)
+    return next
+  },
+
+  async deleteComment(id, commentId, identity: CommentIdentity) {
+    const all = readAll()
+    const idx = indexOf(all, id)
+    const comments = [...all[idx].comments]
+    const cIdx = comments.findIndex((c) => c.id === commentId)
+    if (cIdx < 0) throw new Error('评论不存在或已被删除。')
+    const target = comments[cIdx]
+    if (target.deleted) throw new Error('评论已被删除。')
+    // 只能删自己发的：署名与角色都需匹配
+    if (target.author !== identity.author || target.role !== identity.role) {
+      throw new Error('只能删除自己发布的评论。')
+    }
+    comments[cIdx] = {
+      ...target,
+      deleted: true,
+      deletedBy: identity.author,
+      deletedByRole: identity.role,
+      deletedAt: new Date().toISOString(),
+    }
+    const next: Item = { ...all[idx], comments, updatedAt: new Date().toISOString() }
     all[idx] = next
     writeAll(all)
     return next

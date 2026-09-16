@@ -30,6 +30,12 @@ export interface Comment {
   role: 'product' | 'developer'
   body: string
   createdAt: string
+  /** 软删除标记：true 时内容不再展示，仅留「xx 删除了一条评论」占位 */
+  deleted?: boolean
+  /** 删除人署名（谁删的显示谁） */
+  deletedBy?: string
+  deletedByRole?: 'product' | 'developer'
+  deletedAt?: string
 }
 
 /** 一条需求 / 缺陷 */

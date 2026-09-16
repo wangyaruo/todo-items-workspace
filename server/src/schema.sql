@@ -29,12 +29,15 @@ CREATE TABLE IF NOT EXISTS attachments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS comments (
-  id         VARCHAR(36) NOT NULL,
-  item_id    VARCHAR(36) NOT NULL,
-  author     VARCHAR(50) NOT NULL,
-  role       VARCHAR(16) NOT NULL COMMENT 'product / developer',
-  body       TEXT        NOT NULL,
-  created_at DATETIME(3) NOT NULL,
+  id              VARCHAR(36) NOT NULL,
+  item_id         VARCHAR(36) NOT NULL,
+  author          VARCHAR(50) NOT NULL,
+  role            VARCHAR(16) NOT NULL COMMENT 'product / developer',
+  body            TEXT        NOT NULL,
+  created_at      DATETIME(3) NOT NULL,
+  deleted_at      DATETIME(3) NULL COMMENT '软删除时间，非空即已删除（留痕，不展示内容）',
+  deleted_by      VARCHAR(50) NULL COMMENT '删除人署名',
+  deleted_by_role VARCHAR(16) NULL COMMENT '删除人角色 product / developer',
   PRIMARY KEY (id),
   KEY idx_cmt_item (item_id),
   CONSTRAINT fk_cmt_item FOREIGN KEY (item_id) REFERENCES items (id) ON DELETE CASCADE
