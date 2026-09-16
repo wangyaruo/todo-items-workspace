@@ -83,6 +83,19 @@ export function statusMeta(key: StatusKey): StatusMeta {
   return STATUS_FLOW.find((s) => s.key === key) ?? STATUS_FLOW[0]
 }
 
+/**
+ * 列表排序的状态权重（与 STATUS_FLOW 的展示顺序无关，别复用）：
+ * 待处理、重新处理优先露脸，然后是开发中、待验证、验证通过，已归档垫底。
+ */
+export const STATUS_SORT_ORDER: Record<StatusKey, number> = {
+  pending: 0,
+  rework: 1,
+  developing: 2,
+  verifying: 3,
+  passed: 4,
+  archived: 5,
+}
+
 export const ROLE_LABEL: Record<Role, string> = {
   product: '产品',
   developer: '开发',

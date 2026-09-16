@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { api, type ItemPatch } from '@/api'
-import { ROLE_LABEL } from '@/constants'
+import { ROLE_LABEL, STATUS_SORT_ORDER } from '@/constants'
 import { portProgress } from '@/utils/ports'
 import type { Item, ItemDraft, ItemType, PortKey, Role, StatusKey } from '@/types'
 
@@ -98,18 +98,22 @@ export const portCounts = computed<Record<PortKey, number>>(() => {
 
 /** 当前展示的列表 */
 export const visibleItems = computed(() => {
-  let list: Item[]
+  // 归档视图：状态恒为 archived，只按创建时间倒序
   if (archivedView.value) {
-    list = [...scopedItems.value]
-  } else {
-    list = scopedItems.value.filter(
-      (it) => statusFilter.value === 'all' || it.status === statusFilter.value,
-    )
+    return [...scopedItems.value].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
+  let list = scopedItems.value.filter(
+    (it) => statusFilter.value === 'all' || it.status === statusFilter.value,
+  )
   if (portFilter.value.length > 0) {
     list = list.filter((it) => it.ports.some((p) => portFilter.value.includes(p)))
   }
-  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  // 主视图：先按状态权重（待处理、重新处理 → 开发中 → 待验证 → 验证通过），同状态内最新在前
+  return list.sort(
+    (a, b) =>
+      STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status] ||
+      b.createdAt.localeCompare(a.createdAt),
+  )
 })
 
 export const activeItem = computed(() => items.value.find((it) => it.id === activeId.value) ?? null)
